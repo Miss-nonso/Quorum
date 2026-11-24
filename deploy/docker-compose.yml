@@ -1,0 +1,52 @@
+# Local development stack: `make dev` (or `docker compose -f deploy/docker-compose.yml up`).
+# Values here are development defaults only; production uses docker-compose.prod.yml
+# with secrets from the environment.
+name: conductor
+
+x-backend: &backend
+  build:
+    context: ../backend
+  image: conductor-backend:dev
+  environment:
+    CONDUCTOR_ENV: development
+    CONDUCTOR_DATABASE_URL: postgresql+asyncpg://conductor:conductor@db:5432/conductor
+    CONDUCTOR_LOG_LEVEL: ${CONDUCTOR_LOG_LEVEL:-INFO}
+    CONDUCTOR_LOG_FORMAT: ${CONDUCTOR_LOG_FORMAT:-json}
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: conductor
+      POSTGRES_PASSWORD: conductor
+      POSTGRES_DB: conductor
+    ports:
+      # 5433 on the host avoids clashing with a locally installed PostgreSQL.
+      - "127.0.0.1:${CONDUCTOR_DB_HOST_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U conductor -d conductor"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    <<: *backend
+    command: ["migrate"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    <<: *backend
+    command: ["api"]
+    ports:
+      - "127.0.0.1:${CONDUCTOR_API_HOST_PORT:-8000}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:
