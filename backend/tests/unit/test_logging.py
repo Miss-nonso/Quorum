@@ -6,7 +6,12 @@ import sys
 
 import pytest
 
-from conductor.core.logging import JsonFormatter, bind_log_context, current_log_context
+from conductor.core.logging import (
+    JsonFormatter,
+    TextFormatter,
+    bind_log_context,
+    current_log_context,
+)
 
 
 def _record(
@@ -60,3 +65,9 @@ def test_exceptions_are_serialised() -> None:
         record.exc_info = sys.exc_info()
     payload = json.loads(JsonFormatter().format(record))
     assert "ValueError: boom" in payload["exc"]
+
+
+def test_text_formatter_includes_context_and_extras() -> None:
+    with bind_log_context(request_id="req-1"):
+        line = TextFormatter().format(_record("request", method="GET", status=200))
+    assert line.endswith("request request_id=req-1 method=GET status=200")

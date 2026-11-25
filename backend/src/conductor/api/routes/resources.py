@@ -6,10 +6,12 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Query, Request, status
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from conductor import __version__
 from conductor.api.deps import Limit, Offset, ReadConn, Registry, WriteConn
 from conductor.api.errors import ApiError, ErrorResponse
 from conductor.api.schemas import (
@@ -385,6 +387,17 @@ async def replay(
 @router.get("/stats", response_model=StatsOut, tags=["overview"], summary="Overview counters")
 async def stats(conn: ReadConn) -> StatsOut:
     return StatsOut.model_validate(await queries.stats(conn))
+
+
+class MetaOut(BaseModel):
+    version: str
+    demo_mode: bool
+
+
+@router.get("/meta", response_model=MetaOut, tags=["overview"], summary="Deployment facts")
+async def meta(request: Request) -> MetaOut:
+    """What the dashboard needs to know about this deployment (e.g. is it the public demo)."""
+    return MetaOut(version=__version__, demo_mode=request.app.state.settings.demo_mode)
 
 
 @router.get(

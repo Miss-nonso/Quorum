@@ -245,3 +245,36 @@ async def test_worker_stops_all_work_when_it_cannot_renew_for_a_whole_lease(
         await eventually(gave_up, within=5, what="worker to abandon all work")
         assert time.monotonic() - started >= 0.5, "must not give up before a lease could lapse"
     assert "task_succeeded" not in await event_types(db, job.task_id)
+
+
+async def test_demo_worker_crashes_before_reporting_if_killed_mid_task(
+    engine: AsyncEngine, database_url: str, db: asyncpg.Connection
+) -> None:
+    """A kill that lands mid-task must stop the result from being reported."""
+    job = await enqueue(engine, "sleep", {"seconds": 0.5})
+    config = replace(FAST, heartbeat_interval_s=0.9, lease_ttl_s=2, demo_chaos=True)
+    worker = Worker(engine=engine, registry=REGISTRY, config=config, database_url=database_url)
+    exits: list[int] = []
+
+    def fake_exit(code: int) -> None:
+        exits.append(code)
+        worker.request_stop()
+        raise asyncio.CancelledError  # unwind this task like the process would vanish
+
+    worker.hard_exit = fake_exit
+    runner = asyncio.create_task(worker.run())
+    try:
+        await eventually(lambda: _is(db, job.task_id, "running"), what="task to start")
+        await db.execute(
+            "INSERT INTO worker_commands (worker_id, command) VALUES ($1, 'kill')", worker.id
+        )
+        await eventually(lambda: _exited(exits), within=5, what="the worker to crash")
+    finally:
+        worker.request_stop()
+        await asyncio.wait_for(runner, timeout=10)
+    assert exits == [137]
+    assert "task_succeeded" not in await event_types(db, job.task_id), "result must not land"
+
+
+async def _exited(exits: list[int]) -> bool:
+    return bool(exits)

@@ -248,6 +248,8 @@ class Worker:
         except Exception as exc:
             await self._report_failure(claim, FailureKind.ERROR, _describe(exc))
         else:
+            if self._config.demo_chaos:
+                await self._obey_pending_kill()
             await self._report_success(claim, result, time.perf_counter() - started)
 
     def _mark_reporting(self, claim: ClaimedTask) -> None:
@@ -335,11 +337,7 @@ class Worker:
                     )
                 last_renewed = time.monotonic()
                 if "kill" in commands:
-                    # A real crash, on purpose: no lease release, no cleanup, no
-                    # goodbye. Exactly what the reaper exists to recover from.
-                    logger.critical("demo: killed by chaos command; exiting immediately")
-                    logging.shutdown()
-                    self.hard_exit(137)
+                    self._crash()
                     return
             except Exception:
                 logger.exception("heartbeat failed")
@@ -353,6 +351,28 @@ class Worker:
                 lost = self._inflight.get(task_id)
                 if lost is not None and not lost.reporting:
                     await self._abandon_lost_lease(lost)
+
+    def _crash(self) -> None:
+        """A real crash, on purpose: no lease release, no cleanup, no goodbye.
+
+        Exactly what the reaper exists to recover from.
+        """
+        logger.critical("demo: killed by chaos command; exiting immediately")
+        logging.shutdown()
+        self.hard_exit(137)
+
+    async def _obey_pending_kill(self) -> None:
+        """Demo only: crash *before* reporting a result if a kill is pending.
+
+        Heartbeats only look for commands every interval, so a short task could
+        otherwise finish between the kill and the next heartbeat, and the
+        visitor who pressed "kill" would see the task complete on the worker
+        they just killed. Checking here makes "kill mid-task" deterministic.
+        """
+        async with self._engine.begin() as conn:
+            commands = await worker_store.take_commands(conn, worker_id=self.id)
+        if "kill" in commands:
+            self._crash()
 
     async def _abandon_lost_lease(self, entry: _Inflight) -> None:
         claim = entry.claim

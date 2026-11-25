@@ -65,9 +65,12 @@ class TextFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         line = super().format(record)
-        ctx = _log_context.get()
-        if ctx:
-            line += " " + " ".join(f"{k}={v}" for k, v in ctx.items())
+        fields = {
+            **_log_context.get(),
+            **{k: v for k, v in vars(record).items() if k not in _STANDARD_ATTRS},
+        }
+        if fields:
+            line += " " + " ".join(f"{k}={v}" for k, v in fields.items())
         return line
 
 

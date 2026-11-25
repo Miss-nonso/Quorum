@@ -71,7 +71,7 @@ def create_app(settings: Settings | None = None, *, start_hub: bool = True) -> F
             CORSMiddleware,
             allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
             allow_methods=["GET", "POST", "PUT"],
-            allow_headers=["Content-Type", "Last-Event-ID", "X-Request-ID"],
+            allow_headers=["Content-Type", "Last-Event-ID", "X-Request-ID", "X-Sandbox-Id"],
             expose_headers=["X-Request-ID"],
             max_age=600,
         )

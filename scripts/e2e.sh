@@ -13,21 +13,31 @@ export CONDUCTOR_HEARTBEAT_INTERVAL_S="${CONDUCTOR_HEARTBEAT_INTERVAL_S:-1}"
 export CONDUCTOR_REAPER_INTERVAL_S="${CONDUCTOR_REAPER_INTERVAL_S:-1}"
 export CONDUCTOR_WORKER_UNHEALTHY_AFTER_S="${CONDUCTOR_WORKER_UNHEALTHY_AFTER_S:-3}"
 export CONDUCTOR_WORKER_DEAD_AFTER_S="${CONDUCTOR_WORKER_DEAD_AFTER_S:-8}"
+# The suite exercises the public demo (sandboxes, kill-worker, failure injection).
+export CONDUCTOR_DEMO_MODE=true
+export CONDUCTOR_DEMO_CHAOS=true
+export CONDUCTOR_DEMO_STEP_DELAY_S="${CONDUCTOR_DEMO_STEP_DELAY_S:-0.8}"
 
 pids=()
 cleanup() {
-  for pid in "${pids[@]}"; do kill "$pid" 2>/dev/null || true; done
-  wait 2>/dev/null || true
+  trap - EXIT INT TERM
+  # Each service runs in its own session (setsid), so signal the whole group:
+  # that reaches uv, the Python process under it, and any respawn loop.
+  for pid in "${pids[@]}"; do kill -TERM -- "-$pid" 2>/dev/null || true; done
+  sleep 2
+  for pid in "${pids[@]}"; do kill -KILL -- "-$pid" 2>/dev/null || true; done
 }
 trap cleanup EXIT
 
 cd "$ROOT/backend"
 uv run conductor migrate
 uv run conductor seed
-uv run conductor api >"$LOGS/api.log" 2>&1 & pids+=($!)
-uv run conductor scheduler >"$LOGS/scheduler.log" 2>&1 & pids+=($!)
-uv run conductor worker >"$LOGS/worker-1.log" 2>&1 & pids+=($!)
-uv run conductor worker >"$LOGS/worker-2.log" 2>&1 & pids+=($!)
+setsid uv run conductor api >"$LOGS/api.log" 2>&1 & pids+=($!)
+setsid uv run conductor scheduler >"$LOGS/scheduler.log" 2>&1 & pids+=($!)
+for n in 1 2 3; do
+  # Respawn loop, like a container restart policy: a demo "kill" comes back as a new worker.
+  setsid bash -c "while true; do uv run conductor worker >>'$LOGS/worker-$n.log' 2>&1; sleep 1; done" & pids+=($!)
+done
 
 for _ in $(seq 1 60); do
   curl -sf http://localhost:8000/api/v1/health >/dev/null && break

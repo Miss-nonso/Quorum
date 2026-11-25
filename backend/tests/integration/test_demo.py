@@ -56,6 +56,11 @@ async def test_demo_endpoints_are_off_unless_demo_mode(client: httpx.AsyncClient
     assert (await client.get("/api/v1/demo/dataset")).status_code == 200, "dataset is always public"
 
 
+async def test_meta_reports_demo_mode(demo: httpx.AsyncClient, client: httpx.AsyncClient) -> None:
+    assert (await demo.get("/api/v1/meta")).json()["demo_mode"] is True
+    assert (await client.get("/api/v1/meta")).json()["demo_mode"] is False
+
+
 async def test_sandbox_ids_are_validated(demo: httpx.AsyncClient) -> None:
     for bad in ("short", "has spaces in it!!!!!", "x" * 65):
         response = await demo.post("/api/v1/demo/runs", headers={"X-Sandbox-Id": bad})
@@ -256,11 +261,20 @@ async def test_per_ip_action_budget(database_url: str, engine: AsyncEngine) -> N
         Settings(database_url=database_url, demo_mode=True, demo_actions_per_ip_per_min=3)
     )
     async with make_client(app) as client:
-        statuses = [
-            (await client.get("/api/v1/demo/sandbox", headers=ME)).status_code for _ in range(4)
+        reads = [
+            (await client.get("/api/v1/demo/sandbox", headers=ME)).status_code for _ in range(6)
+        ]
+        writes = [
+            (
+                await client.post(
+                    "/api/v1/demo/chaos/toggle-failures", headers=ME, json={"enabled": True}
+                )
+            ).status_code
+            for _ in range(4)
         ]
     await app.state.engine.dispose()
-    assert statuses == [200, 200, 200, 429]
+    assert reads == [200] * 6, "polling the sandbox must not spend the action budget"
+    assert writes == [200, 200, 200, 429]
 
 
 async def test_reset_removes_only_old_finished_data(

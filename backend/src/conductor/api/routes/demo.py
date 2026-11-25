@@ -70,21 +70,29 @@ def _too_many(message: str, retry_after: float) -> ApiError:
     return error
 
 
-async def demo_sandbox(
+async def demo_sandbox_read(
     request: Request,
     x_sandbox_id: Annotated[str, Header(description="Random per-visitor id, made by the browser.")],
 ) -> str:
-    """Demo writes need demo mode, a well-formed sandbox id and an unspent rate budget."""
+    """Demo reads need demo mode and a valid sandbox id; polled, so not rate-limited."""
     if not _settings(request).demo_mode:
         raise ApiError(403, "demo_disabled", "Demo endpoints are disabled on this deployment.")
     if not service.SANDBOX_ID.match(x_sandbox_id):
         raise ApiError(422, "invalid_sandbox", "X-Sandbox-Id must be 16-64 URL-safe characters.")
-    wait = _limiters(request).actions.check(_client_ip(request))
-    if wait:
-        raise _too_many("Slow down a little: too many demo actions from your address.", wait)
     return x_sandbox_id
 
 
+async def demo_sandbox(
+    request: Request, sandbox_id: Annotated[str, Depends(demo_sandbox_read)]
+) -> str:
+    """Demo writes also spend the caller's per-IP action budget."""
+    wait = _limiters(request).actions.check(_client_ip(request))
+    if wait:
+        raise _too_many("Slow down a little: too many demo actions from your address.", wait)
+    return sandbox_id
+
+
+SandboxRead = Annotated[str, Depends(demo_sandbox_read)]
 Sandbox = Annotated[str, Depends(demo_sandbox)]
 
 
@@ -105,7 +113,7 @@ class SandboxOut(BaseModel):
 
 
 @router.get("/sandbox", response_model=SandboxOut, summary="Your sandbox", responses=LIMITED)
-async def sandbox(sandbox_id: Sandbox, conn: ReadConn) -> SandboxOut:
+async def sandbox(sandbox_id: SandboxRead, conn: ReadConn) -> SandboxOut:
     return SandboxOut.model_validate(await service.sandbox_state(conn, sandbox_id))
 
 
