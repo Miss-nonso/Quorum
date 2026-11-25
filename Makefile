@@ -62,6 +62,30 @@ test-chaos: db ## Run only the chaos tests (real worker processes, SIGKILL/SIGST
 .PHONY: check
 check: lint typecheck test ## Everything CI runs on the backend
 
+# ---------------------------------------------------------------- frontend
+FE := cd frontend && npm run
+E2E_DATABASE_URL ?= postgresql+asyncpg://conductor:conductor@localhost:5433/conductor
+
+.PHONY: fe-install
+fe-install: ## Install dashboard dependencies
+	cd frontend && npm ci
+
+.PHONY: fe-dev
+fe-dev: ## Dashboard dev server on :3000 (expects the API on :8000)
+	$(FE) dev
+
+.PHONY: fe-check
+fe-check: ## Dashboard lint, format, types, unit/component tests, production build
+	$(FE) lint
+	$(FE) format:check
+	$(FE) typecheck
+	$(FE) test
+	$(FE) build
+
+.PHONY: e2e
+e2e: db ## Playwright end to end against a real backend (starts API, scheduler, workers)
+	CONDUCTOR_DATABASE_URL=$(E2E_DATABASE_URL) ./scripts/e2e.sh
+
 .PHONY: bench
 bench: db ## Run the benchmarks (see docs/benchmarks.md)
 	$(UV) python bench/claim_ordering.py

@@ -62,6 +62,72 @@ jobs:
           uv run coverage report --fail-under=85
           --include='src/conductor/domain/*,src/conductor/worker/*,src/conductor/scheduler/*,src/conductor/store/*'
 
+  frontend:
+    name: Dashboard · lint, types, tests, build
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  e2e:
+    name: End to end (Playwright + axe)
+    runs-on: ubuntu-24.04
+    needs: [backend-test, frontend]
+    defaults:
+      run:
+        working-directory: .
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: conductor
+          POSTGRES_PASSWORD: conductor
+          POSTGRES_DB: conductor
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U conductor -d conductor"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      CONDUCTOR_DATABASE_URL: postgresql+asyncpg://conductor:conductor@localhost:5432/conductor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.9"
+          enable-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: uv sync --locked
+        working-directory: backend
+      - run: npm ci
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: ./scripts/e2e.sh
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+
   backend-image:
     name: Backend · image build
     runs-on: ubuntu-24.04
