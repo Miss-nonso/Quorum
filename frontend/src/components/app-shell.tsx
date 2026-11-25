@@ -37,6 +37,11 @@ const CONNECTION: Record<ConnectionState, { label: string; tone: string; hint: s
     hint: "Stream dropped; retrying. No events will be lost.",
   },
   offline: { label: "Offline", tone: "failed", hint: "Can't reach the API. Data may be stale; retrying." },
+  paused: {
+    label: "Paused",
+    tone: "pending",
+    hint: "Live updates pause while you're away, so the free demo server can sleep. Move the mouse or press a key to resume.",
+  },
 };
 
 export function ConnectionIndicator() {
@@ -150,6 +155,22 @@ function MainNav() {
   return <NavList pathname={usePathname()} />;
 }
 
+/** Free hosting sleeps when idle; tell the first visitor why the page is waiting. */
+function WakingBanner() {
+  const { wakingUp } = useLive();
+  if (!wakingUp) return null;
+  return (
+    <div
+      role="status"
+      className="border-b px-4 py-2.5 text-center text-sm"
+      style={{ borderColor: "var(--st-ready)", backgroundColor: "var(--st-ready-bg)" }}
+    >
+      <strong>Waking up the demo server…</strong> It runs on free hosting, which sleeps when nobody is using
+      it. The first visit takes up to a minute; this page updates by itself.
+    </div>
+  );
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh">
@@ -179,6 +200,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <MainNav />
         </Suspense>
       </header>
+      <WakingBanner />
       <main id="main" tabIndex={-1} className="mx-auto min-h-[85dvh] max-w-7xl px-4 py-6 focus:outline-none">
         {children}
       </main>
