@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from conductor.domain.backoff import BackoffPolicy
 from conductor.domain.dag import WorkflowDefinition, validate_definition
+from conductor.domain.idempotency import validate_idempotency_key
 from conductor.store.tasks import TaskSpec
 
 JsonDict = dict[str, Any]
@@ -129,8 +130,15 @@ class TaskRegistry:
         idempotency_key: str | None = None,
         delay_s: float = 0.0,
     ) -> TaskSpec:
-        """Validate and normalise a task before it is enqueued."""
+        """Validate and normalise a task before it is enqueued.
+
+        Raises:
+            UnknownTaskTypeError, InvalidParamsError: bad type or params.
+            ValueError: an invalid idempotency key override.
+        """
         parsed = self.parse_params(task_type, params or {})
+        if idempotency_key is not None:
+            validate_idempotency_key(idempotency_key)
         return TaskSpec(
             task_type=task_type,
             params=parsed.model_dump(mode="json"),

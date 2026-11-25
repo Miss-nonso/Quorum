@@ -40,6 +40,10 @@ class Settings(BaseModel):
     log_format: LogFormat = Field(default=LogFormat.JSON)
     api_host: str = Field(default="127.0.0.1")
     api_port: int = Field(default=8000, ge=1, le=65535)
+    cors_origins: str = Field(
+        default="http://localhost:3000",
+        description="Comma-separated origins allowed to call the API from a browser.",
+    )
 
     # --- worker
     worker_concurrency: int = Field(default=4, ge=1, le=64)
