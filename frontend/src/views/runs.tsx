@@ -388,7 +388,12 @@ export function RunDetailView({ id }: { id: string }) {
             />
           </Section>
           <Section title="Event log">
-            <div className="max-h-96 overflow-y-auto">
+            <div
+              className="max-h-96 overflow-y-auto"
+              tabIndex={0}
+              role="region"
+              aria-label="Event log, scrollable"
+            >
               <EventFeed events={r.events.slice().reverse()} showRunLinks={false} limit={500} />
             </div>
           </Section>

@@ -46,7 +46,7 @@ const TaskNode = memo(function TaskNode({ data }: NodeProps<DagNode>) {
         type="button"
         onClick={() => data.onSelect?.(data.key)}
         aria-pressed={data.onSelect ? data.selected : undefined}
-        aria-label={`${data.key}, ${data.task_type}${meta ? `, ${meta.label}${attempts}` : ""}`}
+        // No aria-label: the accessible name is the visible text (WCAG 2.5.3 label in name).
         className={`flex w-[200px] items-center gap-2.5 rounded-xl border bg-surface px-3 py-2.5 text-left shadow-card transition-[box-shadow,border-color] ${
           data.selected ? "ring-2 ring-[var(--focus)]" : ""
         } ${data.onSelect ? "cursor-pointer hover:border-border-strong" : "cursor-default"}`}
@@ -71,6 +71,7 @@ const TaskNode = memo(function TaskNode({ data }: NodeProps<DagNode>) {
 });
 
 const nodeTypes = { task: TaskNode };
+const enableNodePointerEvents = () => {};
 
 export function DagView({
   nodes,
@@ -131,6 +132,10 @@ export function DagView({
         edgesFocusable={false}
         elementsSelectable={false}
         proOptions={{ hideAttribution: true }}
+        // React Flow only enables pointer events on nodes that have a handler.
+        // Selection is handled by the button inside each node (so keyboard and
+        // mouse share one code path); this handler just turns clicks on.
+        onNodeClick={onSelect ? enableNodePointerEvents : undefined}
         panOnScroll={false}
         zoomOnScroll={false}
       >

@@ -5,7 +5,16 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-import { formatNumber, formatRelative, formatTime, prettyJson, shortId } from "@/lib/format";
+import {
+  formatDuration,
+  formatNumber,
+  formatRelative,
+  formatTime,
+  prettyJson,
+  runDuration,
+  shortId,
+} from "@/lib/format";
+import { useNow } from "@/lib/use-now";
 import { narrate, type Tone } from "@/lib/narrate";
 import type { RunEvent, Stats } from "@/lib/types";
 import { StatusIcon } from "./status";
@@ -226,11 +235,22 @@ export function Pagination({
   );
 }
 
+/**
+ * "3 min ago". Ticks on its own, so only this element re-renders as time
+ * passes (not the whole page). Pass `now` to render from a shared clock.
+ */
 export function RelativeTime({ iso, now }: { iso: string | null; now?: number }) {
+  const ticking = useNow(now === undefined ? 5000 : 0);
   if (!iso) return <span>—</span>;
   return (
     <time dateTime={iso} title={new Date(iso).toLocaleString()}>
-      {formatRelative(iso, now)}
+      {formatRelative(iso, now ?? ticking)}
     </time>
   );
+}
+
+/** A run's duration; ticks once a second only while the run is unfinished. */
+export function LiveDuration({ start, end }: { start: string | null; end: string | null }) {
+  const now = useNow(end ? 0 : 1000);
+  return <>{formatDuration(runDuration(start, end, now) ?? NaN)}</>;
 }

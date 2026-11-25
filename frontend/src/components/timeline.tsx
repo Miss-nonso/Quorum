@@ -88,7 +88,13 @@ export function Timeline({
                 stroke="var(--border)"
                 strokeDasharray="3 3"
               />
-              <text x={x(t)} y={height - 6} fontSize="11" textAnchor="middle" fill="var(--text-muted)">
+              <text
+                x={x(t)}
+                y={height - 6}
+                fontSize="11"
+                textAnchor={i === 0 ? "start" : i === ticks.length - 1 ? "end" : "middle"}
+                fill="var(--text-muted)"
+              >
                 +{formatDuration(t - start)}
               </text>
             </g>

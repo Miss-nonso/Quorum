@@ -21,6 +21,9 @@ test.describe("dashboard smoke @mobile", () => {
       await expect(page.getByRole("heading", { level: 1, name: "Overview" })).toBeVisible();
       await expect(page.getByRole("status").filter({ hasText: "Live" })).toBeVisible();
       await expect(page.getByText("Succeeded").first()).toBeVisible();
+      // Nothing may force sideways scrolling, least of all on a phone.
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      expect(overflow, "horizontal overflow in px").toBeLessThanOrEqual(0);
       await expectAccessible(page);
     });
   }
@@ -38,11 +41,11 @@ test("trigger the sample workflow and watch it finish", async ({ page }) => {
     timeout: 30_000,
   });
   for (const step of ["fetch", "validate", "transform", "store", "report", "notify"]) {
-    await expect(page.getByRole("button", { name: new RegExp(`^${step}, .*Succeeded`) })).toBeVisible();
+    await expect(page.getByRole("button", { name: new RegExp(`^${step}\\b.*Succeeded`) })).toBeVisible();
   }
 
   // Inspect a step: the panel shows its result.
-  await page.getByRole("button", { name: /^store,/ }).click();
+  await page.getByRole("button", { name: /^store\b/ }).click();
   await expect(page.getByRole("heading", { name: "store" })).toBeVisible();
   await expect(page.getByLabel("Result of store")).toContainText('"stored": 4');
   await expect(page.getByRole("img", { name: /Execution timeline/ })).toBeVisible();
@@ -70,10 +73,11 @@ test("a dead-lettered job can be replayed with one click", async ({ page, reques
     data: { task_type: "flaky", params: { failure_rate: 1 }, max_attempts: 1 },
   });
   expect(job.ok()).toBeTruthy();
-  const { task_id } = await job.json();
+  const { task_id, run_id } = (await job.json()) as { task_id: string; run_id: string };
 
   await page.goto("/dead-letters");
-  const card = page.getByRole("listitem").filter({ hasText: "simulated failure on attempt 1" }).first();
+  // Find *this* job's card by its run id: earlier runs may have left similar letters.
+  const card = page.getByRole("listitem").filter({ hasText: `run ${run_id.slice(0, 8)}` });
   await expect(card).toBeVisible({ timeout: 20_000 });
   await card.getByRole("button", { name: /Replay/ }).click();
   await expect(page.getByRole("status").filter({ hasText: "back in the queue" })).toBeVisible();
