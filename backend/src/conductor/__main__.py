@@ -1,15 +1,19 @@
 """Command-line entry point: ``conductor <command>``.
 
-One image, several process types. Phase 0 ships ``api`` and ``migrate``;
-``scheduler`` and ``worker`` arrive with the engine in later phases.
+One image, several process types: ``api``, ``worker``, ``scheduler`` and
+``migrate``.
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
+import signal
+from collections.abc import Callable, Coroutine
 from pathlib import Path
+from typing import Any
 
-from conductor.core.config import get_settings
+from conductor.core.config import Settings, get_settings
 from conductor.core.logging import configure_logging
 
 # Run from the backend project root (locally) or /app (in the image), where
@@ -17,12 +21,11 @@ from conductor.core.logging import configure_logging
 _ALEMBIC_INI = Path("alembic.ini")
 
 
-def _run_api() -> None:
+def _run_api(settings: Settings, _: argparse.Namespace) -> None:
     import uvicorn
 
     from conductor.api.app import create_app
 
-    settings = get_settings()
     uvicorn.run(
         create_app(settings),
         host=settings.api_host,
@@ -32,7 +35,7 @@ def _run_api() -> None:
     )
 
 
-def _run_migrate() -> None:
+def _run_migrate(_: Settings, __: argparse.Namespace) -> None:
     from alembic import command
     from alembic.config import Config
 
@@ -41,18 +44,82 @@ def _run_migrate() -> None:
     command.upgrade(Config(str(_ALEMBIC_INI)), "head")
 
 
+async def _serve_until_signalled(
+    start: Callable[[], Coroutine[Any, Any, None]], stop: Callable[[], None]
+) -> None:
+    """Run ``start()``; on SIGTERM/SIGINT call ``stop()`` and let it wind down."""
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, stop)
+    await start()
+
+
+def _run_worker(settings: Settings, args: argparse.Namespace) -> None:
+    from conductor.core.db import create_engine
+    from conductor.tasks import builtin_registry
+    from conductor.worker.runtime import Worker, WorkerConfig
+
+    if args.concurrency is not None:
+        settings = settings.model_copy(update={"worker_concurrency": args.concurrency})
+
+    async def main() -> None:
+        # Pool: one connection per task slot, plus heartbeat and claim loops.
+        engine = create_engine(
+            settings.model_copy(update={"db_pool_size": settings.worker_concurrency + 2})
+        )
+        worker = Worker(
+            engine=engine,
+            registry=builtin_registry(),
+            config=WorkerConfig.from_settings(settings),
+            database_url=settings.database_url,
+        )
+        try:
+            await _serve_until_signalled(worker.run, worker.request_stop)
+        finally:
+            await engine.dispose()
+
+    asyncio.run(main())
+
+
+def _run_scheduler(settings: Settings, _: argparse.Namespace) -> None:
+    from conductor.core.db import create_engine
+    from conductor.scheduler.reaper import Reaper, ReaperConfig
+
+    async def main() -> None:
+        engine = create_engine(settings)
+        reaper = Reaper(engine=engine, config=ReaperConfig.from_settings(settings))
+        try:
+            await _serve_until_signalled(reaper.run, reaper.request_stop)
+        finally:
+            await engine.dispose()
+
+    asyncio.run(main())
+
+
+_COMMANDS: dict[str, Callable[[Settings, argparse.Namespace], None]] = {
+    "api": _run_api,
+    "worker": _run_worker,
+    "scheduler": _run_scheduler,
+    "migrate": _run_migrate,
+}
+
+
 def main(argv: list[str] | None = None) -> None:
     """Parse arguments and run the selected process type."""
     parser = argparse.ArgumentParser(prog="conductor", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("api", help="Serve the HTTP API.")
+    worker = sub.add_parser("worker", help="Claim and execute tasks.")
+    worker.add_argument("--concurrency", type=int, help="Task slots (default from settings).")
+    sub.add_parser(
+        "scheduler", help="Run the reaper (and, in later phases, cron and run advancement)."
+    )
     sub.add_parser("migrate", help="Apply database migrations up to head.")
     args = parser.parse_args(argv)
 
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_format)
-
-    {"api": _run_api, "migrate": _run_migrate}[args.command]()
+    _COMMANDS[args.command](settings, args)
 
 
 if __name__ == "__main__":
