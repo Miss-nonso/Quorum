@@ -131,6 +131,10 @@ jobs:
   compose:
     name: Compose files and dashboard image
     runs-on: ubuntu-24.04
+    defaults:
+      run:
+        # The workflow default is `backend`; these paths are relative to the repo root.
+        working-directory: .
     steps:
       - uses: actions/checkout@v4
       - name: Validate compose files
