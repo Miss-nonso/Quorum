@@ -4,16 +4,10 @@ import { Crown } from "lucide-react";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/app-shell";
+import { ThroughputChart } from "@/components/throughput-chart";
 import { ErrorState, LoadingBlock, Skeleton } from "@/components/states";
 import { StatusBadge } from "@/components/status";
-import {
-  EventFeed,
-  LiveDuration,
-  RelativeTime,
-  Section,
-  StatCard,
-  ThroughputChart,
-} from "@/components/widgets";
+import { EventFeed, LiveDuration, RelativeTime, Section, StatCard } from "@/components/widgets";
 import { shortId } from "@/lib/format";
 import { useLive } from "@/lib/live";
 import { useRuns, useStats, useWorkers } from "@/lib/queries";

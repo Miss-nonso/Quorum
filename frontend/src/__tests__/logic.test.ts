@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { layoutDag } from "@/lib/dag-layout";
+import { layoutDag, topologicalOrder } from "@/lib/dag-layout";
 import { formatDuration, formatRelative, runDuration } from "@/lib/format";
 import { narrate } from "@/lib/narrate";
 import { attemptsFromEvents, timelineBounds } from "@/lib/timeline";
@@ -36,6 +36,17 @@ describe("layoutDag", () => {
     const a = Object.fromEntries(layoutDag(SAMPLE).map((p) => [p.key, p.column]));
     const b = Object.fromEntries(layoutDag(shuffled).map((p) => [p.key, p.column]));
     expect(b).toEqual(a);
+  });
+
+  it("orders rows by dependency, not by name", () => {
+    const tasks = [...SAMPLE]
+      .sort((a, b) => a.key.localeCompare(b.key))
+      .map((n) => ({ node_key: n.key, depends_on: n.depends_on }));
+    const order = topologicalOrder(tasks);
+    for (const n of SAMPLE)
+      for (const d of n.depends_on) expect(order.indexOf(d)).toBeLessThan(order.indexOf(n.key));
+    expect(order[0]).toBe("fetch");
+    expect(order.at(-1)).toBe("notify");
   });
 
   it("rejects cycles instead of looping forever", () => {

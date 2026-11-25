@@ -49,8 +49,14 @@ const GuideContext = createContext<GuideState>({
   restart: () => {},
 });
 
+function setDocumentGuide(state: "done" | "todo") {
+  document.documentElement.dataset.guide = state;
+}
+
 export function GuideProvider({ children }: { children: ReactNode }) {
-  const [index, setIndex] = useState<number | null>(null);
+  // Starts on step 1 so the server renders it; the pre-paint script hides it
+  // (via data-guide on <html>) for visitors who already dismissed the tour.
+  const [index, setIndex] = useState<number | null>(0);
 
   useEffect(() => {
     let done = false;
@@ -59,13 +65,16 @@ export function GuideProvider({ children }: { children: ReactNode }) {
     } catch {
       // storage unavailable: show the guide
     }
-    // Deferred: the tour is client-only state, unknown during prerender.
-    const id = setTimeout(() => setIndex(done ? null : 0), 0);
-    return () => clearTimeout(id);
+    if (done) {
+      // Already hidden by CSS before paint; this just syncs React's state.
+      const id = setTimeout(() => setIndex(null), 0);
+      return () => clearTimeout(id);
+    }
   }, []);
 
   const finish = useCallback(() => {
     setIndex(null);
+    setDocumentGuide("done");
     try {
       localStorage.setItem(STORAGE_KEY, "1");
     } catch {
@@ -77,7 +86,10 @@ export function GuideProvider({ children }: { children: ReactNode }) {
     current: index === null ? null : GUIDE_STEPS[index].id,
     next: () => (index !== null && index < GUIDE_STEPS.length - 1 ? setIndex(index + 1) : finish()),
     dismiss: finish,
-    restart: () => setIndex(0),
+    restart: () => {
+      setDocumentGuide("todo");
+      setIndex(0);
+    },
   };
   return <GuideContext.Provider value={value}>{children}</GuideContext.Provider>;
 }
@@ -93,6 +105,7 @@ export function GuideStep({ id }: { id: StepId }) {
   return (
     <div
       role="region"
+      data-guide-step=""
       aria-label={`Guide, step ${index + 1} of ${GUIDE_STEPS.length}`}
       className="mb-3 flex items-start gap-3 rounded-xl border p-3 text-sm"
       style={{ borderColor: "var(--accent)", backgroundColor: "var(--accent-soft)" }}

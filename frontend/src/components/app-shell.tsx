@@ -179,7 +179,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <MainNav />
         </Suspense>
       </header>
-      <main id="main" tabIndex={-1} className="mx-auto max-w-7xl px-4 py-6 focus:outline-none">
+      <main id="main" tabIndex={-1} className="mx-auto min-h-[85dvh] max-w-7xl px-4 py-6 focus:outline-none">
         {children}
       </main>
       <footer className="mx-auto flex max-w-7xl items-center gap-2 px-4 pb-8 text-xs text-muted">

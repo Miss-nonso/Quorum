@@ -18,8 +18,9 @@ export const viewport: Viewport = {
   ],
 };
 
-// Runs before first paint: apply the saved or system theme so there is no flash.
-const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem("conductor-theme");if(t!=="light"&&t!=="dark"){t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.dataset.theme=t}catch(e){}})();`;
+// Runs before first paint: apply the saved or system theme, and whether the demo guide was
+// dismissed, so neither causes a flash or a layout shift.
+const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem("conductor-theme");if(t!=="light"&&t!=="dark"){t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.dataset.theme=t;document.documentElement.dataset.guide=localStorage.getItem("conductor-guide-done")==="1"?"done":"todo"}catch(e){}})();`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

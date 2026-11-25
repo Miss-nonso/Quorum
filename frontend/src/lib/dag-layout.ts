@@ -70,3 +70,18 @@ export function layoutDag(nodes: LayoutInput[]): Positioned[] {
     })),
   );
 }
+
+/** Keys in dependency order (each after everything it depends on), stable for ties. */
+export function topologicalOrder(nodes: { node_key: string; depends_on: string[] }[]): string[] {
+  const byKey = new Map(nodes.map((n) => [n.node_key, n]));
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const visit = (key: string) => {
+    if (seen.has(key)) return;
+    seen.add(key);
+    byKey.get(key)?.depends_on.forEach(visit);
+    out.push(key);
+  };
+  nodes.forEach((n) => visit(n.node_key));
+  return out;
+}

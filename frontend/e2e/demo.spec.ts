@@ -27,7 +27,7 @@ test("the guide walks through four steps and can be dismissed", async ({ page })
   await page.reload();
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expect(page.getByRole("region", { name: /Guide, step/ })).toHaveCount(0);
-  await page.getByRole("button", { name: "Show the guide" }).click();
+  await page.getByRole("button", { name: /(Show|Restart) the guide/ }).click();
   await expect(page.getByRole("region", { name: /Guide, step 1 of 4/ })).toBeVisible();
 });
 

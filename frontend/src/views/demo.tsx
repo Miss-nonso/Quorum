@@ -5,7 +5,7 @@ import { BadgeHelp, Play, RotateCcw, Skull, Waves, Zap } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
 
-import { DagView } from "@/components/dag-view";
+import { DagView } from "@/components/lazy";
 import { GuideProvider, GuideStep, useGuide } from "@/components/guide";
 import { ErrorState, LoadingBlock, Skeleton } from "@/components/states";
 import { StatusBadge } from "@/components/status";
@@ -13,6 +13,7 @@ import { Timeline } from "@/components/timeline";
 import { useToast } from "@/components/toast";
 import { EventFeed, LiveDuration, Section } from "@/components/widgets";
 import { api, ApiError } from "@/lib/api";
+import { topologicalOrder } from "@/lib/dag-layout";
 import { shortId } from "@/lib/format";
 import { useLive } from "@/lib/live";
 import { useReplay, useRun, useWorkers } from "@/lib/queries";
@@ -56,7 +57,7 @@ function CurrentRun({ runId }: { runId: string }) {
   }
   if (run.isError) return <ErrorState error={run.error} onRetry={() => run.refetch()} />;
   const r = run.data;
-  const order = r.tasks.map((t) => t.node_key);
+  const order = topologicalOrder(r.tasks);
 
   return (
     <div className="flex flex-col gap-3">
@@ -357,11 +358,10 @@ function DemoBody() {
             <Play aria-hidden="true" className="size-4" />{" "}
             {start.isPending ? "Starting…" : "Run the pipeline"}
           </button>
-          {!current ? (
-            <button type="button" className="btn-secondary" onClick={restart}>
-              Show the guide
-            </button>
-          ) : null}
+          {/* Always rendered, so the row never re-wraps (no layout shift). */}
+          <button type="button" className="btn-secondary" onClick={restart}>
+            {current ? "Restart the guide" : "Show the guide"}
+          </button>
           <Link href="/overview" className="link text-sm">
             Or see the whole system
           </Link>

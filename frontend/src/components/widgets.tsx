@@ -3,7 +3,6 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import {
   formatDuration,
@@ -16,7 +15,7 @@ import {
 } from "@/lib/format";
 import { useNow } from "@/lib/use-now";
 import { narrate, type Tone } from "@/lib/narrate";
-import type { RunEvent, Stats } from "@/lib/types";
+import type { RunEvent } from "@/lib/types";
 import { StatusIcon } from "./status";
 
 export function StatCard({
@@ -44,59 +43,6 @@ export function StatCard({
         )}
       </div>
       <p className="text-xs text-muted">{hint}</p>
-    </div>
-  );
-}
-
-export function ThroughputChart({ stats }: { stats: Stats }) {
-  const data = stats.throughput.map((p) => ({ ...p, t: formatTime(p.start) }));
-  const total = data.reduce((sum, p) => sum + p.succeeded, 0);
-  return (
-    <div
-      className="h-44"
-      role="img"
-      aria-label={`Throughput: ${total} tasks succeeded in the last ${Math.round((data.length * stats.bucket_s) / 60)} minutes.`}
-    >
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-          <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
-          <XAxis
-            dataKey="t"
-            tick={{ fontSize: 11, fill: "var(--text-muted)" }}
-            interval="preserveStartEnd"
-            minTickGap={40}
-          />
-          <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "var(--text-muted)" }} />
-          <Tooltip
-            contentStyle={{
-              background: "var(--surface)",
-              border: "1px solid var(--border)",
-              borderRadius: 8,
-              fontSize: 12,
-            }}
-            labelStyle={{ color: "var(--text)" }}
-          />
-          <Area
-            type="monotone"
-            dataKey="succeeded"
-            name="Succeeded"
-            stroke="var(--chart-ok)"
-            fill="var(--chart-ok)"
-            fillOpacity={0.15}
-            isAnimationActive={false}
-          />
-          <Area
-            type="monotone"
-            dataKey="failed"
-            name="Failed"
-            stroke="var(--chart-bad)"
-            fill="var(--chart-bad)"
-            fillOpacity={0.15}
-            strokeDasharray="4 2"
-            isAnimationActive={false}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
     </div>
   );
 }

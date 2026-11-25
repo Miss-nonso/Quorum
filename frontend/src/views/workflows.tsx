@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 
 import { PageHeader } from "@/components/app-shell";
-import { DagView } from "@/components/dag-view";
+import { DagView } from "@/components/lazy";
 import { EmptyState, ErrorState, LoadingBlock, Skeleton } from "@/components/states";
 import { StatusBadge } from "@/components/status";
 import { useToast } from "@/components/toast";

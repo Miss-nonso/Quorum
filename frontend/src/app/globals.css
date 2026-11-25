@@ -147,6 +147,11 @@ body {
   outline: none;
 }
 
+/* The demo guide is server-rendered; returning visitors hide it before first paint. */
+html[data-guide="done"] [data-guide-step] {
+  display: none;
+}
+
 @keyframes skeleton-pulse {
   50% {
     opacity: 0.55;
