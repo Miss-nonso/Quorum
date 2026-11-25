@@ -1,4 +1,7 @@
-# Deployment runbook
+# Deployment runbook (VPS, always on)
+
+> Want **$0/month** instead? Use [deployment-free.md](deployment-free.md): Vercel + Render + Neon,
+> with the trade-off that the free server sleeps when idle.
 
 The public demo runs as:
 

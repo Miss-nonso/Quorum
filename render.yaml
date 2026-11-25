@@ -1,0 +1,56 @@
+# Render Blueprint: the whole backend as ONE free web service (`conductor all`).
+# The database is Neon's free Postgres; the dashboard is on Vercel's free plan.
+# Runbook: docs/deployment-free.md
+services:
+  - type: web
+    name: conductor-api
+    runtime: docker
+    plan: free
+    # Pick the region closest to your Neon project (latency per query matters).
+    region: frankfurt
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    # API + scheduler in one process, 2 supervised worker subprocesses (~250 MB of 512 MB).
+    dockerCommand: conductor all
+    healthCheckPath: /api/v1/health
+    # Deploy a commit only after GitHub Actions (CI) has passed on it.
+    autoDeployTrigger: checksPass
+    envVars:
+      # Neon *direct* connection string (pooling OFF): LISTEN/NOTIFY and session
+      # advisory locks don't work through a transaction-mode pooler.
+      - key: CONDUCTOR_DATABASE_URL
+        sync: false
+      # Your Vercel dashboard URL, e.g. https://conductor-demo.vercel.app
+      - key: CONDUCTOR_CORS_ORIGINS
+        sync: false
+      - key: CONDUCTOR_DEMO_MODE
+        value: "true"
+      - key: CONDUCTOR_DEMO_CHAOS
+        value: "true"
+      - key: CONDUCTOR_LOG_FORMAT
+        value: json
+      - key: CONDUCTOR_ALL_IN_ONE_WORKERS
+        value: "2"
+      - key: CONDUCTOR_WORKER_CONCURRENCY
+        value: "2"
+      # Keep the connection count modest on Neon's smallest compute.
+      - key: CONDUCTOR_DB_POOL_SIZE
+        value: "3"
+      # Demo timings: a killed worker's task is recovered within seconds.
+      - key: CONDUCTOR_LEASE_TTL_S
+        value: "6"
+      - key: CONDUCTOR_HEARTBEAT_INTERVAL_S
+        value: "1"
+      - key: CONDUCTOR_REAPER_INTERVAL_S
+        value: "1"
+      - key: CONDUCTOR_WORKER_UNHEALTHY_AFTER_S
+        value: "3"
+      - key: CONDUCTOR_WORKER_DEAD_AFTER_S
+        value: "8"
+      # Free CPU is small: cap concurrent demo runs, keep data tiny (Neon: 1 GB).
+      - key: CONDUCTOR_DEMO_MAX_ACTIVE_RUNS
+        value: "10"
+      - key: CONDUCTOR_DEMO_RETENTION_S
+        value: "1800"
+      - key: CONDUCTOR_DEMO_RESET_INTERVAL_S
+        value: "300"

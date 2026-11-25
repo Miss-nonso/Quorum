@@ -76,6 +76,14 @@ scheduler, three chaos-enabled workers and the dashboard.
 Without containers (uses the Compose database on port 5433): `make dev-host` for the backend and
 `make fe-dev` for the dashboard.
 
+## Deploy for free
+
+Vercel (dashboard) + Render (backend, one free web service running `conductor all`) + Neon (free
+Postgres): **$0/month**, with a Render Blueprint (`render.yaml`) included. The trade-off is that
+the free server sleeps when idle, and the first visitor waits about a minute while it wakes (the
+dashboard explains this). Step by step: [docs/deployment-free.md](docs/deployment-free.md). For
+an always-on setup on a small VPS, see [docs/deployment.md](docs/deployment.md).
+
 ## Development
 
 ```bash
@@ -137,7 +145,8 @@ Method, hardware and how to reproduce: [docs/benchmarks.md](docs/benchmarks.md).
 ## Documentation
 
 - [Architecture](docs/architecture.md) · [Delivery semantics](docs/semantics.md) ·
-  [Benchmarks](docs/benchmarks.md) · [Deployment runbook (and cost)](docs/deployment.md)
+  [Benchmarks](docs/benchmarks.md) · [Free deployment (Vercel + Render + Neon)](docs/deployment-free.md) ·
+  [VPS deployment](docs/deployment.md)
 - Architecture decision records:
   [0000 Record decisions](docs/adr/0000-record-architecture-decisions.md) ·
   [0001 PostgreSQL as the queue](docs/adr/0001-postgres-as-the-queue.md) ·

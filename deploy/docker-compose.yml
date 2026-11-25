@@ -46,7 +46,7 @@ services:
 
   migrate:
     <<: *backend
-    command: ["migrate"]
+    command: ["conductor", "migrate"]
     restart: "no"
     healthcheck:
       disable: true
@@ -56,7 +56,7 @@ services:
 
   seed:
     <<: *backend
-    command: ["seed"]
+    command: ["conductor", "seed"]
     restart: "no"
     healthcheck:
       disable: true
@@ -66,7 +66,7 @@ services:
 
   api:
     <<: *backend
-    command: ["api"]
+    command: ["conductor", "api"]
     ports:
       - "127.0.0.1:${CONDUCTOR_API_HOST_PORT:-8000}:8000"
     depends_on:
@@ -75,7 +75,7 @@ services:
 
   scheduler:
     <<: *backend
-    command: ["scheduler"]
+    command: ["conductor", "scheduler"]
     healthcheck:
       disable: true  # no HTTP port; leadership is visible in /api/v1/stats
     depends_on:
@@ -85,7 +85,7 @@ services:
   # More workers: docker compose -f deploy/docker-compose.yml up --scale worker=5
   worker:
     <<: *backend
-    command: ["worker"]
+    command: ["conductor", "worker"]
     environment:
       <<: *backend-env
       CONDUCTOR_WORKER_CONCURRENCY: ${CONDUCTOR_WORKER_CONCURRENCY:-4}

@@ -53,21 +53,21 @@ services:
 
   migrate:
     <<: *backend
-    command: ["migrate"]
+    command: ["conductor", "migrate"]
     restart: "no"
     healthcheck: { disable: true }
     depends_on: { db: { condition: service_healthy } }
 
   seed:
     <<: *backend
-    command: ["seed"]
+    command: ["conductor", "seed"]
     restart: "no"
     healthcheck: { disable: true }
     depends_on: { migrate: { condition: service_completed_successfully } }
 
   api:
     <<: *backend
-    command: ["api"]
+    command: ["conductor", "api"]
     environment:
       <<: *backend-env
       # Trust X-Forwarded-For only because the API is reachable solely through Caddy.
@@ -79,7 +79,7 @@ services:
   # Two schedulers: one leads (advisory lock), the other takes over if it dies.
   scheduler:
     <<: *backend
-    command: ["scheduler"]
+    command: ["conductor", "scheduler"]
     healthcheck: { disable: true }
     depends_on: { migrate: { condition: service_completed_successfully } }
     deploy:
@@ -89,7 +89,7 @@ services:
   # The demo pool: chaos-enabled, restarted after every "kill a worker".
   worker:
     <<: *backend
-    command: ["worker"]
+    command: ["conductor", "worker"]
     environment:
       <<: *backend-env
       CONDUCTOR_DEMO_CHAOS: "true"
