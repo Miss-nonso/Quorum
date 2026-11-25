@@ -27,3 +27,5 @@ out/
 .vscode/
 *.swp
 .DS_Store
+playwright-report/
+test-results/

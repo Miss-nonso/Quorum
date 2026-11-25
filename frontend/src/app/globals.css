@@ -1,0 +1,180 @@
+@import "tailwindcss";
+
+/* Theme follows the OS unless the user picked one (stored as data-theme on <html>). */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * Design tokens. Every text/icon colour below meets WCAG AA (4.5:1) against
+ * --surface in its theme; status is never conveyed by colour alone (each
+ * status also has an icon and a label).
+ */
+:root {
+  color-scheme: light;
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f1f3f6;
+  --border: #dde1e7;
+  --border-strong: #c3c9d2;
+  --text: #0f172a;
+  --text-muted: #4b5563;
+  --accent: #4338ca;
+  --accent-hover: #3730a3;
+  --accent-fg: #ffffff;
+  --accent-soft: #eef0ff;
+  --focus: #4338ca;
+
+  --st-pending: #4b5563;
+  --st-ready: #a14a0c;
+  --st-running: #1d4ed8;
+  --st-succeeded: #15803d;
+  --st-failed: #b91c1c;
+  --st-dead: #7e22ce;
+  --st-cancelled: #52525b;
+
+  --st-pending-bg: #f1f3f6;
+  --st-ready-bg: #fff4e6;
+  --st-running-bg: #e8efff;
+  --st-succeeded-bg: #e8f7ee;
+  --st-failed-bg: #fdecec;
+  --st-dead-bg: #f5ecfd;
+  --st-cancelled-bg: #f1f1f3;
+
+  --chart-ok: #16a34a;
+  --chart-bad: #dc2626;
+  --shadow: 0 1px 2px rgb(15 23 42 / 0.06), 0 1px 3px rgb(15 23 42 / 0.08);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0b0d12;
+  --surface: #12151c;
+  --surface-2: #181c25;
+  --border: #262b36;
+  --border-strong: #353c4a;
+  --text: #e6e8ee;
+  --text-muted: #a0a8b8;
+  --accent: #8b93ff;
+  --accent-hover: #a5abff;
+  --accent-fg: #0b0d12;
+  --accent-soft: #1d2040;
+  --focus: #a5abff;
+
+  --st-pending: #a0a8b8;
+  --st-ready: #fbbf24;
+  --st-running: #6ea8fe;
+  --st-succeeded: #4ade80;
+  --st-failed: #f87171;
+  --st-dead: #c99bfb;
+  --st-cancelled: #a1a1aa;
+
+  --st-pending-bg: #1a1e27;
+  --st-ready-bg: #2a2110;
+  --st-running-bg: #131e36;
+  --st-succeeded-bg: #102318;
+  --st-failed-bg: #2b1414;
+  --st-dead-bg: #22142f;
+  --st-cancelled-bg: #1c1c20;
+
+  --chart-ok: #4ade80;
+  --chart-bad: #f87171;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --shadow-card: var(--shadow);
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* One consistent, highly visible focus ring for keyboard users. */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* React Flow: inherit our tokens so the graph themes with the app. */
+.react-flow {
+  --xy-background-color: transparent;
+  --xy-edge-stroke: var(--border-strong);
+  --xy-edge-stroke-selected: var(--accent);
+  --xy-controls-button-background-color: var(--surface);
+  --xy-controls-button-background-color-hover: var(--surface-2);
+  --xy-controls-button-color: var(--text);
+  --xy-controls-button-border-color: var(--border);
+  --xy-attribution-background-color: transparent;
+}
+.react-flow__controls {
+  box-shadow: var(--shadow);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.react-flow__node:focus-visible {
+  outline: none;
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+.skeleton {
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+  background: var(--surface-2);
+  border-radius: 6px;
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-border bg-surface shadow-card;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-accent-fg transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-text transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .link {
+    @apply font-medium text-accent underline-offset-2 hover:underline;
+  }
+  .label {
+    @apply text-xs font-medium tracking-wide text-muted uppercase;
+  }
+  .field {
+    @apply rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-text;
+  }
+}
