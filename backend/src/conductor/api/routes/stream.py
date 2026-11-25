@@ -46,6 +46,10 @@ async def stream(
     after: Annotated[
         int | None, Query(ge=0, description="Replay events after this id (EventSource polyfills).")
     ] = None,
+    recent: Annotated[
+        int,
+        Query(ge=0, le=100, description="On a fresh connect, first send this many past events."),
+    ] = 0,
 ) -> StreamingResponse:
     run_filter = str(run_id) if run_id else None
     resume_from = last_event_id if last_event_id is not None else after
@@ -56,9 +60,12 @@ async def stream(
             yield Message("hello", dumps(hello)).encode()
             # Subscribe first, then replay: anything published meanwhile is
             # queued, and duplicates are dropped by id below.
-            last_sent = resume_from or 0
-            if resume_from is not None:
-                for missed in await hub.backlog(after_id=resume_from, run_id=run_filter):
+            replay_from = resume_from
+            if replay_from is None and recent:
+                replay_from = await hub.recent_start(recent, run_id=run_filter)
+            last_sent = replay_from or 0
+            if replay_from is not None:
+                for missed in await hub.backlog(after_id=replay_from, run_id=run_filter):
                     last_sent = missed.id or last_sent
                     yield missed.encode()
             for snapshot in await hub.snapshot_messages():

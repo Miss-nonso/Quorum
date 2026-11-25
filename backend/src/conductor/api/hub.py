@@ -140,6 +140,13 @@ class EventHub:
             )
         return [self._event_message(r) for r in rows]
 
+    async def recent_start(self, count: int, *, run_id: str | None) -> int:
+        """The event id to replay from so that the last ``count`` events are sent."""
+        async with self._engine.connect() as conn:
+            return await queries.nth_latest_event_id(
+                conn, count, run_id=UUID(run_id) if run_id else None
+            )
+
     async def snapshot_messages(self) -> list[Message]:
         """Current workers and stats, so a new client paints immediately."""
         async with self._engine.connect() as conn:

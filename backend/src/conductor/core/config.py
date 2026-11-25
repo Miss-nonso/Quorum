@@ -62,6 +62,10 @@ class Settings(BaseModel):
     )
     http_timeout_s: float = Field(default=10.0, gt=0, le=60)
     http_max_bytes: int = Field(default=256 * 1024, ge=1, le=10 * 1024 * 1024)
+    demo_dataset_url: str = Field(
+        default="http://localhost:8000/api/v1/demo/dataset",
+        description="Where the seeded sample workflow fetches its input (must be allowlisted).",
+    )
 
     # --- scheduler / reaper
     reaper_interval_s: float = Field(default=5.0, gt=0)

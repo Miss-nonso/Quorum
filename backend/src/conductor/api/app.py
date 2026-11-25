@@ -12,7 +12,7 @@ from conductor import __version__
 from conductor.api.errors import ErrorResponse, install_error_handlers
 from conductor.api.hub import EventHub
 from conductor.api.request_context import RequestContextMiddleware
-from conductor.api.routes import health, metrics, resources, stream
+from conductor.api.routes import demo, health, metrics, resources, stream
 from conductor.core.config import Settings, get_settings
 from conductor.core.db import asyncpg_dsn, create_engine, create_session_factory
 from conductor.tasks import builtin_registry
@@ -82,6 +82,7 @@ def create_app(settings: Settings | None = None, *, start_hub: bool = True) -> F
     v1.include_router(resources.router)
     v1.include_router(stream.router)
     v1.include_router(metrics.router)
+    v1.include_router(demo.router)
     app.include_router(v1)
     # Prometheus convention: also serve metrics at the root path.
     app.add_api_route("/metrics", metrics.metrics, include_in_schema=False)

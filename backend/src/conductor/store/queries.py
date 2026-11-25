@@ -117,6 +117,25 @@ async def events(
     return [dict(r._mapping) for r in rows]
 
 
+async def nth_latest_event_id(conn: AsyncConnection, n: int, *, run_id: UUID | None = None) -> int:
+    """An id such that ``events(after_id=...)`` returns the latest ``n`` events."""
+    value = (
+        await conn.execute(
+            text(
+                """
+                SELECT COALESCE(min(id) - 1, 0) FROM (
+                    SELECT id FROM run_events
+                    WHERE CAST(:run_id AS uuid) IS NULL OR run_id = :run_id
+                    ORDER BY id DESC LIMIT :n
+                ) latest
+                """
+            ),
+            {"n": n, "run_id": run_id},
+        )
+    ).scalar_one()
+    return int(value)
+
+
 async def latest_event_id(conn: AsyncConnection) -> int:
     value = (await conn.execute(text("SELECT COALESCE(max(id), 0) FROM run_events"))).scalar_one()
     return int(value)

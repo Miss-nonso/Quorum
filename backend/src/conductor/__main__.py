@@ -1,7 +1,7 @@
 """Command-line entry point: ``conductor <command>``.
 
-One image, several process types: ``api``, ``worker``, ``scheduler`` and
-``migrate``.
+One image, several process types: ``api``, ``worker``, ``scheduler``, plus
+the one-shot ``migrate`` and ``seed``.
 """
 
 from __future__ import annotations
@@ -32,6 +32,10 @@ def _run_api(settings: Settings, _: argparse.Namespace) -> None:
         port=settings.api_port,
         log_config=None,  # keep our JSON logging configuration
         proxy_headers=True,
+        # SSE streams never end on their own, so without a bound uvicorn's
+        # graceful shutdown would wait on them forever. Clients reconnect
+        # (with Last-Event-ID) to another instance and lose nothing.
+        timeout_graceful_shutdown=settings.shutdown_grace_s,
     )
 
 
@@ -100,11 +104,26 @@ def _run_scheduler(settings: Settings, _: argparse.Namespace) -> None:
     asyncio.run(main())
 
 
+def _run_seed(settings: Settings, _: argparse.Namespace) -> None:
+    from conductor.core.db import create_engine
+    from conductor.seed import seed
+
+    async def main() -> None:
+        engine = create_engine(settings)
+        try:
+            await seed(engine, dataset_url=settings.demo_dataset_url)
+        finally:
+            await engine.dispose()
+
+    asyncio.run(main())
+
+
 _COMMANDS: dict[str, Callable[[Settings, argparse.Namespace], None]] = {
     "api": _run_api,
     "worker": _run_worker,
     "scheduler": _run_scheduler,
     "migrate": _run_migrate,
+    "seed": _run_seed,
 }
 
 
@@ -119,6 +138,7 @@ def main(argv: list[str] | None = None) -> None:
         "scheduler", help="Run the reaper (and, in later phases, cron and run advancement)."
     )
     sub.add_parser("migrate", help="Apply database migrations up to head.")
+    sub.add_parser("seed", help="Create the sample workflow if it does not exist.")
     args = parser.parse_args(argv)
 
     settings = get_settings()

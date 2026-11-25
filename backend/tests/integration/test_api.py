@@ -276,3 +276,18 @@ async def test_cors_allows_the_dashboard_origin(client: httpx.AsyncClient) -> No
         headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "GET"},
     )
     assert "access-control-allow-origin" not in denied.headers
+
+
+async def test_seed_is_idempotent_and_the_dataset_is_served(
+    client: httpx.AsyncClient, engine: AsyncEngine, caplog: pytest.LogCaptureFixture
+) -> None:
+    from conductor.seed import seed
+
+    caplog.set_level("INFO")  # exercise the log calls too (a bad `extra` key raises)
+    assert await seed(engine, dataset_url="http://localhost:8000/api/v1/demo/dataset")
+    assert not await seed(engine, dataset_url="http://localhost:8000/api/v1/demo/dataset")
+    workflows = (await client.get("/api/v1/workflows")).json()
+    assert [w["name"] for w in workflows["items"]] == ["order-pipeline"]
+    dataset = (await client.get("/api/v1/demo/dataset")).json()
+    assert len(dataset) == 8
+    assert {"id", "customer", "total", "status"} <= set(dataset[0])

@@ -113,3 +113,15 @@ async def test_stream_can_be_filtered_to_one_run(server: str) -> None:
             # The other run's event must not arrive: wait briefly and check.
             with pytest.raises(TimeoutError):
                 await sse.read(until="run_event", within=2.5)
+
+
+async def test_fresh_connections_can_ask_for_recent_history(server: str) -> None:
+    async with httpx.AsyncClient(base_url=server, timeout=10) as client:
+        jobs = [
+            (await client.post("/api/v1/jobs", json={"task_type": "sleep"})).json()
+            for _ in range(5)
+        ]
+        async with client.stream("GET", "/api/v1/stream", params={"recent": 3}) as response:
+            replay = await SSEReader(response).read(until="run_event", count=3)
+            events = [m for m in replay if m["event"] == "run_event"]
+            assert [e["data"]["task_id"] for e in events] == [j["task_id"] for j in jobs[-3:]]

@@ -88,6 +88,10 @@ class Cluster:
         proc.worker_id = await eventually(registered, within=15, what=f"{name} to register")
         return proc
 
+    def api(self, port: int) -> Proc:
+        self.extra_env["CONDUCTOR_API_PORT"] = str(port)
+        return self._spawn("api", "api")
+
     def scheduler(self) -> Proc:
         count = sum(1 for p in self.procs if p.name.startswith("scheduler"))
         return self._spawn(f"scheduler-{count}", "scheduler")
