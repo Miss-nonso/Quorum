@@ -7,6 +7,7 @@ process and shared; sessions are short-lived and scoped to a unit of work.
 from __future__ import annotations
 
 from sqlalchemy import text
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -40,3 +41,12 @@ async def ping(engine: AsyncEngine) -> None:
     """Run a trivial query; raises if the database is unreachable."""
     async with engine.connect() as conn:
         await conn.execute(text("SELECT 1"))
+
+
+def asyncpg_dsn(database_url: str) -> str:
+    """Convert a SQLAlchemy URL to a plain DSN for direct asyncpg connections.
+
+    Used for long-lived dedicated connections (LISTEN, and advisory locks
+    later) that must not be borrowed from, or returned to, the pool.
+    """
+    return make_url(database_url).set(drivername="postgresql").render_as_string(hide_password=False)

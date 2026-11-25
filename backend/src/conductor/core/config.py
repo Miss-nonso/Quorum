@@ -12,7 +12,7 @@ from collections.abc import Mapping
 from enum import StrEnum
 from functools import lru_cache
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 ENV_PREFIX = "CONDUCTOR_"
 
@@ -40,6 +40,31 @@ class Settings(BaseModel):
     log_format: LogFormat = Field(default=LogFormat.JSON)
     api_host: str = Field(default="127.0.0.1")
     api_port: int = Field(default=8000, ge=1, le=65535)
+
+    # --- worker
+    worker_concurrency: int = Field(default=4, ge=1, le=64)
+    lease_ttl_s: float = Field(default=30.0, gt=0, description="How long a claim lasts unrenewed.")
+    heartbeat_interval_s: float = Field(default=5.0, gt=0)
+    poll_interval_s: float = Field(
+        default=2.0, gt=0, description="Max idle wait between claim attempts (LISTEN is a hint)."
+    )
+    shutdown_grace_s: float = Field(default=20.0, ge=0)
+    worker_listen: bool = Field(default=True, description="Use LISTEN/NOTIFY to wake early.")
+
+    # --- scheduler / reaper
+    reaper_interval_s: float = Field(default=5.0, gt=0)
+    reaper_batch_size: int = Field(default=100, ge=1, le=10_000)
+    worker_unhealthy_after_s: float = Field(default=15.0, gt=0)
+    worker_dead_after_s: float = Field(default=60.0, gt=0)
+
+    @model_validator(mode="after")
+    def _check_timing(self) -> Settings:
+        # At least two heartbeats per lease: one lost heartbeat must not cost a lease.
+        if self.heartbeat_interval_s * 2 > self.lease_ttl_s:
+            raise ValueError("heartbeat_interval_s must be at most half of lease_ttl_s")
+        if self.worker_unhealthy_after_s >= self.worker_dead_after_s:
+            raise ValueError("worker_unhealthy_after_s must be less than worker_dead_after_s")
+        return self
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> Settings:

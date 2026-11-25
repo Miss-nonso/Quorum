@@ -30,6 +30,7 @@ dev = [
     "mypy>=2.4.1",
     "pytest>=9.2.0",
     "pytest-asyncio>=1.5.0",
+    "pytest-cov>=7.1.0",
     "ruff>=0.17.6",
 ]
 
@@ -52,6 +53,8 @@ select = [
   "PT",            # pytest style
   "RUF",
 ]
+# `random` is used only for backoff jitter and failure simulation, never for secrets.
+ignore = ["S311"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]           # assert is the point of a test
@@ -77,5 +80,21 @@ asyncio_default_fixture_loop_scope = "function"
 addopts = "-ra --strict-markers"
 markers = [
   "integration: needs a real PostgreSQL (see TEST_DATABASE_URL)",
+  "chaos: spawns real worker processes and kills them",
 ]
 filterwarnings = ["error"]
+
+# ---------------------------------------------------------------- coverage
+[tool.coverage.run]
+source = ["conductor"]
+branch = true
+# Chaos tests run real `conductor worker` processes; measure those too.
+# (SIGKILLed processes write no data, so their share is undercounted, not faked.)
+patch = ["subprocess"]
+parallel = true
+sigterm = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError"]
