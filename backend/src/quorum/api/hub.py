@@ -24,6 +24,7 @@ import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -43,6 +44,9 @@ def _json_default(value: Any) -> Any:
         return value.isoformat()
     if isinstance(value, UUID):
         return str(value)
+    if isinstance(value, Decimal):
+        # Postgres numeric: send a JSON number, as the REST API does, never a string.
+        return float(value)
     return str(value)
 
 

@@ -17,6 +17,7 @@ import { useNow } from "@/lib/use-now";
 // ------------------------------------------------------------------ workers
 
 function HeartbeatAge({ seconds }: { seconds: number }) {
+  if (!Number.isFinite(seconds)) return <span className="text-muted">unknown</span>;
   const tone = seconds < 10 ? "succeeded" : seconds < 30 ? "ready" : "failed";
   return (
     <span className="tabular-nums" style={{ color: `var(--st-${tone})` }}>
@@ -27,7 +28,8 @@ function HeartbeatAge({ seconds }: { seconds: number }) {
 
 function WorkerCard({ worker, now, snapshotAt }: { worker: Worker; now: number; snapshotAt: number }) {
   // Age = server-computed age at snapshot time + time since the snapshot arrived.
-  const age = worker.heartbeat_age_s + Math.max(0, (now - snapshotAt) / 1000);
+  // Number(): never let a stringly-typed value turn + into concatenation.
+  const age = Number(worker.heartbeat_age_s) + Math.max(0, (now - snapshotAt) / 1000);
   const load = worker.concurrency ? worker.current_load / worker.concurrency : 0;
   return (
     <li className="card flex flex-col gap-3 p-4">

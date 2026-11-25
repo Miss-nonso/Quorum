@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from collections.abc import Iterator
 from typing import Any
@@ -231,6 +232,12 @@ async def test_dead_letter_listing_and_replay(
     await db.execute(
         "INSERT INTO workers (id, hostname, pid, concurrency) VALUES ($1, 'host-a', 42, 4)", worker
     )
+    from quorum.api.hub import dumps
+    from quorum.store import queries
+
+    async with engine.connect() as conn:
+        snapshot = json.loads(dumps(await queries.list_workers(conn)))
+    assert isinstance(snapshot[0]["heartbeat_age_s"], float), "live snapshot sends a number"
     workers = (await client.get("/api/v1/workers")).json()
     assert [(w["hostname"], w["status"], w["current_tasks"]) for w in workers] == [
         ("host-a", "active", [])

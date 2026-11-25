@@ -149,7 +149,8 @@ async def list_workers(
             """
             SELECT w.id, w.hostname, w.pid, w.status, w.concurrency, w.current_load,
                    w.capabilities, w.started_at, w.last_heartbeat_at,
-                   EXTRACT(EPOCH FROM now() - w.last_heartbeat_at) AS heartbeat_age_s,
+                   -- float8: EXTRACT returns numeric, which would reach JSON as a string.
+                   EXTRACT(EPOCH FROM now() - w.last_heartbeat_at)::float8 AS heartbeat_age_s,
                    COALESCE(
                        (SELECT json_agg(json_build_object(
                                    'task_id', t.id, 'run_id', t.run_id,
