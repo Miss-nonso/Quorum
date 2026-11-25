@@ -92,6 +92,7 @@ e2e: db ## Playwright end to end against a real backend (starts API, scheduler, 
 
 .PHONY: bench
 bench: db ## Run the benchmarks (see docs/benchmarks.md)
+	$(UV) python bench/engine.py
 	$(UV) python bench/claim_ordering.py
 
 .PHONY: demo
