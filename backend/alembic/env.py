@@ -15,6 +15,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from conductor.core.config import get_settings
+from conductor.core.db import engine_args
 
 config = context.config
 
@@ -26,7 +27,10 @@ if config.config_file_name is not None and not logging.getLogger().handlers:
 
 def _database_url() -> str:
     # Tests set sqlalchemy.url explicitly to point at a throwaway database.
-    return config.get_main_option("sqlalchemy.url") or get_settings().database_url
+    explicit = config.get_main_option("sqlalchemy.url")
+    if explicit:
+        return explicit
+    return get_settings().database_url
 
 
 def _run(connection: Connection) -> None:
@@ -36,7 +40,8 @@ def _run(connection: Connection) -> None:
 
 
 async def _run_online() -> None:
-    engine = create_async_engine(_database_url())
+    url, connect_args = engine_args(_database_url())
+    engine = create_async_engine(url, connect_args=connect_args)
     try:
         async with engine.connect() as conn:
             await conn.run_sync(_run)

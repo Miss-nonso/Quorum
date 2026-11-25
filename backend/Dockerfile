@@ -1,5 +1,4 @@
-# One image for every backend process type: `conductor api | migrate`
-# (scheduler and worker arrive in later phases).
+# Backend image: every process type, selected by the command.
 
 # ---- build: resolve and install locked dependencies into /app/.venv -------
 FROM python:3.12-slim-bookworm AS build
@@ -36,8 +35,9 @@ ENV PATH="/app/.venv/bin:$PATH" \
 USER conductor
 EXPOSE 8000
 
-HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
-    CMD ["python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=2).status == 200 else 1)"]
+HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
+    CMD ["python", "-c", "import os, sys, urllib.request; port = os.environ.get('PORT') or os.environ.get('CONDUCTOR_API_PORT', '8000'); sys.exit(0 if urllib.request.urlopen(f'http://127.0.0.1:{port}/api/v1/health', timeout=2).status == 200 else 1)"]
 
-ENTRYPOINT ["conductor"]
-CMD ["api"]
+# One image, many roles: `conductor api | worker | scheduler | migrate | seed | all`.
+# (`all` runs everything in one container, for free hosting tiers.)
+CMD ["conductor", "api"]

@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import math
+import os
 import signal
 from collections.abc import Callable, Coroutine
 from pathlib import Path
@@ -119,12 +120,52 @@ def _run_seed(settings: Settings, _: argparse.Namespace) -> None:
     asyncio.run(main())
 
 
+def _run_all(settings: Settings, args: argparse.Namespace) -> None:
+    """API + scheduler + supervised workers in one container (free hosting tiers)."""
+    import uvicorn
+
+    from conductor.allinone import create_all_in_one_app
+    from conductor.core.db import create_engine
+    from conductor.seed import seed
+
+    # Platforms like Render choose the port and expect 0.0.0.0.
+    port = int(os.environ.get("PORT") or settings.api_port)
+    host = "0.0.0.0" if os.environ.get("PORT") else settings.api_host  # noqa: S104
+    if "CONDUCTOR_DEMO_DATASET_URL" not in os.environ:
+        # The sample's fetch step calls this same container.
+        settings = settings.model_copy(
+            update={"demo_dataset_url": f"http://127.0.0.1:{port}/api/v1/demo/dataset"}
+        )
+
+    _run_migrate(settings, args)
+
+    async def seed_once() -> None:
+        engine = create_engine(settings)
+        try:
+            await seed(engine, dataset_url=settings.demo_dataset_url)
+        finally:
+            await engine.dispose()
+
+    asyncio.run(seed_once())
+    workers = args.workers if args.workers is not None else settings.all_in_one_workers
+    uvicorn.run(
+        create_all_in_one_app(settings, workers=workers),
+        host=host,
+        port=port,
+        log_config=None,
+        proxy_headers=True,
+        forwarded_allow_ips="*" if os.environ.get("PORT") else None,
+        timeout_graceful_shutdown=math.ceil(settings.shutdown_grace_s),
+    )
+
+
 _COMMANDS: dict[str, Callable[[Settings, argparse.Namespace], None]] = {
     "api": _run_api,
     "worker": _run_worker,
     "scheduler": _run_scheduler,
     "migrate": _run_migrate,
     "seed": _run_seed,
+    "all": _run_all,
 }
 
 
@@ -140,6 +181,10 @@ def main(argv: list[str] | None = None) -> None:
     )
     sub.add_parser("migrate", help="Apply database migrations up to head.")
     sub.add_parser("seed", help="Create the sample workflow if it does not exist.")
+    everything = sub.add_parser(
+        "all", help="Migrate, seed, then run API + scheduler + supervised workers in one container."
+    )
+    everything.add_argument("--workers", type=int, help="Worker processes (default from settings).")
     args = parser.parse_args(argv)
 
     settings = get_settings()

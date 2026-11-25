@@ -12,7 +12,14 @@ from collections.abc import Mapping
 from enum import StrEnum
 from functools import lru_cache
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 ENV_PREFIX = "CONDUCTOR_"
 
@@ -86,6 +93,9 @@ class Settings(BaseModel):
     leader_check_interval_s: float = Field(default=2.0, gt=0)
     leader_retry_interval_s: float = Field(default=2.0, gt=0)
 
+    # --- all-in-one mode (`conductor all`, for free hosting tiers)
+    all_in_one_workers: int = Field(default=2, ge=1, le=16)
+
     # --- public demo
     demo_mode: bool = Field(
         default=False,
@@ -105,6 +115,17 @@ class Settings(BaseModel):
     demo_kills_per_min: int = Field(default=6, ge=1, le=600)
     demo_retention_s: float = Field(default=1800, gt=0)
     demo_reset_interval_s: float = Field(default=300, gt=0)
+
+    @field_validator("database_url")
+    @classmethod
+    def _asyncpg_driver(cls, value: str) -> str:
+        """Accept the plain URLs hosting providers hand out (postgres://, postgresql://)."""
+        for prefix in ("postgres://", "postgresql://"):
+            if value.startswith(prefix):
+                return "postgresql+asyncpg://" + value[len(prefix) :]
+        if not value.startswith("postgresql+asyncpg://"):
+            raise ValueError("database_url must be a PostgreSQL URL")
+        return value
 
     @model_validator(mode="after")
     def _check_timing(self) -> Settings:
