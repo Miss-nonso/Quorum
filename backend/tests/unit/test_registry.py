@@ -9,7 +9,16 @@ from conductor.worker.registry import InvalidParamsError, TaskRegistry, UnknownT
 
 
 def test_builtin_registry_exposes_only_the_known_types() -> None:
-    assert builtin_registry().names() == ["flaky", "notify", "sleep"]
+    assert builtin_registry().names() == [
+        "flaky",
+        "http_fetch",
+        "notify",
+        "report",
+        "sleep",
+        "store",
+        "transform",
+        "validate",
+    ]
 
 
 def test_unknown_task_type_is_rejected() -> None:
@@ -42,7 +51,7 @@ def test_build_spec_normalises_params_and_carries_options() -> None:
     spec = builtin_registry().build_spec(
         "notify", {"message": "hi"}, priority=7, max_attempts=5, backoff=policy, delay_s=3
     )
-    assert spec.params == {"channel": "general", "message": "hi", "hold_s": 0.0}
+    assert spec.params == {"channel": "general", "message": "hi", "vars": {}, "hold_s": 0.0}
     assert (spec.priority, spec.max_attempts, spec.backoff, spec.delay_s) == (7, 5, policy, 3)
 
 
