@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from conductor.domain.dag import WorkflowDefinition
+from conductor.store.schedules import sync_schedule
 
 
 class WorkflowNotFoundError(LookupError):
@@ -60,10 +61,11 @@ async def create_workflow(
     timezone: str = "UTC",
     enabled: bool = True,
 ) -> WorkflowRecord:
-    """Store an already-validated definition as version 1.
+    """Store an already-validated definition as version 1, and its schedule if any.
 
     Raises:
         WorkflowNameTakenError: a workflow with this name exists.
+        conductor.domain.cron.CronError: the cron expression or time zone is invalid.
     """
     try:
         async with conn.begin_nested():
@@ -87,6 +89,7 @@ async def create_workflow(
             ).one()
     except IntegrityError as exc:
         raise WorkflowNameTakenError(f"a workflow named {name!r} already exists") from exc
+    await sync_schedule(conn, workflow_id=row.id, cron=cron, timezone=timezone, enabled=enabled)
     return _record(row)
 
 
@@ -126,6 +129,7 @@ async def update_workflow(
     ).one_or_none()
     if row is None:
         raise WorkflowNotFoundError(f"no workflow {workflow_id}")
+    await sync_schedule(conn, workflow_id=row.id, cron=cron, timezone=timezone, enabled=enabled)
     return _record(row)
 
 

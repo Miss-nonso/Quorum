@@ -64,6 +64,19 @@ class Settings(BaseModel):
     reaper_batch_size: int = Field(default=100, ge=1, le=10_000)
     worker_unhealthy_after_s: float = Field(default=15.0, gt=0)
     worker_dead_after_s: float = Field(default=60.0, gt=0)
+    cron_tick_s: float = Field(default=1.0, gt=0)
+    aging_tick_s: float = Field(default=5.0, gt=0)
+    aging_interval_s: float = Field(
+        default=10.0, gt=0, description="Seconds of waiting per +1 effective priority."
+    )
+    aging_max_bonus: int = Field(
+        default=200,
+        ge=0,
+        le=1000,
+        description="Cap on the aging bonus (>= 200 prevents starvation).",
+    )
+    leader_check_interval_s: float = Field(default=2.0, gt=0)
+    leader_retry_interval_s: float = Field(default=2.0, gt=0)
 
     @model_validator(mode="after")
     def _check_timing(self) -> Settings:

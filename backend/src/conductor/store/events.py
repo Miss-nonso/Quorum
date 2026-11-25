@@ -19,6 +19,7 @@ class EventType(StrEnum):
     """Every event the engine records. The dashboard narrates these."""
 
     RUN_CREATED = "run_created"
+    RUN_SCHEDULED = "run_scheduled"
     RUN_SUCCEEDED = "run_succeeded"
     RUN_FAILED = "run_failed"
     RUN_RESUMED = "run_resumed"

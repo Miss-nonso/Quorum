@@ -83,13 +83,17 @@ def _run_worker(settings: Settings, args: argparse.Namespace) -> None:
 
 def _run_scheduler(settings: Settings, _: argparse.Namespace) -> None:
     from conductor.core.db import create_engine
-    from conductor.scheduler.reaper import Reaper, ReaperConfig
+    from conductor.scheduler.service import Scheduler, SchedulerConfig
 
     async def main() -> None:
         engine = create_engine(settings)
-        reaper = Reaper(engine=engine, config=ReaperConfig.from_settings(settings))
+        scheduler = Scheduler(
+            engine=engine,
+            database_url=settings.database_url,
+            config=SchedulerConfig.from_settings(settings),
+        )
         try:
-            await _serve_until_signalled(reaper.run, reaper.request_stop)
+            await _serve_until_signalled(scheduler.run, scheduler.request_stop)
         finally:
             await engine.dispose()
 
