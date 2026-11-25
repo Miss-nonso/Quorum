@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import asyncpg
 import httpx
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 
 from conductor import __version__
+from tests.conftest import BACKEND_DIR
 
 
 async def test_health_is_ok_with_real_database(client: httpx.AsyncClient) -> None:
@@ -17,7 +20,10 @@ async def test_health_is_ok_with_real_database(client: httpx.AsyncClient) -> Non
 
 
 async def test_migrations_are_at_head(db: asyncpg.Connection) -> None:
-    assert await db.fetchval("SELECT version_num FROM alembic_version") == "0001"
+    scripts = ScriptDirectory.from_config(Config(str(BACKEND_DIR / "alembic.ini")))
+    assert (
+        await db.fetchval("SELECT version_num FROM alembic_version") == scripts.get_current_head()
+    )
 
 
 async def test_baseline_pins_database_timezone_to_utc(db: asyncpg.Connection) -> None:
