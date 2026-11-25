@@ -4,9 +4,9 @@
 
 <!-- Badges and the live demo link are added in Phase 7 (Ship). -->
 
-> **Status:** Phases 0 to 2 of 7 are complete: the queue engine and DAG workflows work and are
-> proven under chaos tests, including a kill of every process mid-run. Scheduling, the API
-> surface, the dashboard and the public demo are next. See the [roadmap](#roadmap).
+> **Status:** Phases 0 to 3 of 7 are complete: the queue engine, DAG workflows and scheduling
+> (cron with DST rules, leader election, priority aging) work and are proven under chaos tests.
+> The API surface, the dashboard and the public demo are next. See the [roadmap](#roadmap).
 
 ## Quick start
 
@@ -48,6 +48,9 @@ afterwards. If the server is unreachable the suite fails instead of skipping.
 | Retries duplicating side effects | At-least-once delivery plus idempotency keys behind unique constraints | Kill after the effect but before completion, and exactly one notification exists |
 | Two parents finish at once and both miss the child | Every outcome transaction locks the run row first (run, then task) | 25-iteration race test, which fails on iteration 2 without the lock |
 | Every process killed mid-workflow | All state in Postgres; leases expire; the reaper recovers | Chaos test: SIGKILL everything twice (once after a side effect), restart, the run succeeds, effects happen once |
+| The scheduler leader dies | Advisory lock on a dedicated session; standbys retry. Duties are safe to run twice, and a unique index stops double-firing | Chaos test: SIGKILL the leader process, and the standby takes over (about 0.1s) and fires the next schedule |
+| Low-priority work starving | Periodic aging raises effective priority; claims stay on the index | Starvation test with a no-aging control; benchmark in ADR 0006 (0.19 ms vs 36 ms per claim) |
+| DST makes a job run twice or never | Cron evaluated in local time, with explicit gap and overlap rules | DST tests for New York, London and Lagos, plus property tests |
 | A task that crashes every worker it touches | Lease expiry consumes an attempt, so it eventually goes to the dead-letter queue | `test_reaper_dead_letters_a_task_that_keeps_killing_workers` |
 | Lost wake-up notifications | `NOTIFY` is only a hint; workers always poll | Chaos tests run with LISTEN on and off |
 
@@ -71,8 +74,8 @@ Exact guarantees and non-guarantees are in [`docs/semantics.md`](docs/semantics.
 | 0 | Foundation: scaffold, tooling, Compose, CI, health endpoint, first migration | ✅ |
 | 1 | Core engine: SKIP LOCKED claiming, leases, fencing tokens, retries, DLQ, reaper | ✅ |
 | 2 | Workflows: DAG validation, dependency resolution, failure policies, restart recovery | ✅ |
-| 3 | Scheduling: cron + IANA time zones, leader election, priority aging | ⏳ |
-| 4 | API + realtime: full REST surface, SSE, Prometheus metrics | |
+| 3 | Scheduling: cron + IANA time zones, leader election, priority aging | ✅ |
+| 4 | API + realtime: full REST surface, SSE, Prometheus metrics | ⏳ |
 | 5 | Dashboard: DAG view, timeline, workers, DLQ, history | |
 | 6 | Public demo: sandbox, chaos controls, narrated event feed | |
 | 7 | Ship: production deploy, benchmarks, docs | |
@@ -84,5 +87,7 @@ Architecture decisions are recorded in [`docs/adr/`](docs/adr/):
 - [0001 PostgreSQL as the queue](docs/adr/0001-postgres-as-the-queue.md), including when a broker would be the right call
 - [0002 At-least-once delivery with idempotency keys](docs/adr/0002-at-least-once-with-idempotency-keys.md)
 - [0003 Leases and fencing tokens](docs/adr/0003-leases-and-fencing-tokens.md)
+- [0004 Leader election with an advisory lock](docs/adr/0004-advisory-lock-leader-election.md)
+- [0006 Priority aging by periodic update](docs/adr/0006-priority-aging.md), chosen by benchmark
 - [0007 No arbitrary code execution](docs/adr/0007-no-arbitrary-code-execution.md)
 - [0008 In-house cron parser and JSON Schema subset](docs/adr/0008-in-house-cron-and-json-schema.md)

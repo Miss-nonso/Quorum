@@ -1,7 +1,7 @@
 # Delivery semantics and failure model
 
 This page states precisely what Conductor guarantees and what it does not. Each guarantee names
-the test that fails if it stops being true. *Status: covers Phases 1 and 2 (queue and workflows).*
+the test that fails if it stops being true. *Status: covers Phases 1–3 (queue, workflows, scheduling).*
 
 ## Failure model
 
@@ -60,6 +60,16 @@ permanent failure such as invalid data):
 from the upstream node's stored result just before execution. If the path doesn't exist, the
 task fails permanently instead of running with missing input.
 
+## Scheduling
+
+| # | Guarantee | Proven by |
+| --- | --- | --- |
+| S1 | A schedule's local wall-clock times map to instants with explicit DST rules. A skipped local time fires at the instant the clock jumps, and several skipped times collapse into that one firing. A repeated local time fires once, on its first occurrence. | `test_cron.py`: America/New_York, Europe/London and Africa/Lagos across 2026 transitions, plus property tests (UTC agrees with a minute-by-minute scan; firings strictly increase) |
+| S2 | Each scheduled instant produces at most one run, even with concurrent or failing-over schedulers. | `test_concurrent_schedulers_fire_each_instant_once`, `test_unique_index_blocks_a_duplicate_run_for_the_same_instant` |
+| S3 | **Misfires:** after downtime spanning several fire times, a schedule fires once (for the earliest missed instant), records how many it skipped, and resumes from the next future time. | `test_due_schedule_fires_once_and_skips_missed_instants` |
+| S4 | At most one scheduler holds leadership at a time, and a standby takes over when the leader's session ends. | `test_exactly_one_leader_and_failover_when_its_session_dies`, `test_standby_scheduler_takes_over_when_the_leader_is_killed` |
+| S5 | No task starves. Waiting raises effective priority, and with the default cap any task eventually outranks fresh work of any priority. | `test_low_priority_task_is_not_starved_by_sustained_high_priority_load` (with a no-aging control) |
+
 ## What is *not* guaranteed
 
 - **Exactly-once execution.** A handler may run more than once for the same task: after a crash,
@@ -75,6 +85,8 @@ task fails permanently instead of running with missing input.
 - **Bounded recovery time under database unavailability.** While Postgres is down nothing
   progresses. Workers stop all work once they can't renew for `lease_ttl_s`, and resume when it
   returns.
+- **Single-leader execution of scheduler duties.** During a failover, two schedulers may
+  briefly both run duties. Each duty is written to be safe under that (ADR 0004).
 - **Precise timing.** `not_before` is a lower bound. A retry runs no earlier than its backoff, and
   later if workers are busy.
 
