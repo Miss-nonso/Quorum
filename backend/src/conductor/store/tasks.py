@@ -26,9 +26,12 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from conductor.domain.backoff import BackoffPolicy
+from conductor.domain.dag import FailurePolicy
 from conductor.domain.idempotency import derive_idempotency_key, validate_idempotency_key
 from conductor.domain.retry import DeadLetter, FailureKind, Requeue, decide_after_failure
+from conductor.domain.run_state import RunStatus
 from conductor.domain.task_state import TaskStatus, ensure_transition
+from conductor.store import runs
 from conductor.store.events import EventType, notify_task_ready, record_event
 
 JOB_NODE_KEY = "job"
@@ -276,11 +279,7 @@ async def renew_leases(
 async def _reject_stale_write(
     conn: AsyncConnection, *, task_id: UUID, worker_id: UUID, fencing_token: int, action: str
 ) -> StaleLeaseError:
-    run_id = (
-        await conn.execute(
-            text("SELECT run_id FROM task_instances WHERE id = :id"), {"id": task_id}
-        )
-    ).scalar_one_or_none()
+    run_id = await runs.run_of_task(conn, task_id)
     if run_id is not None:
         await record_event(
             conn,
@@ -299,14 +298,21 @@ async def complete_task(
     worker_id: UUID,
     fencing_token: int,
     result: Mapping[str, Any],
-) -> None:
+) -> list[UUID]:
     """Mark a task succeeded, if and only if the caller still holds its lease.
+
+    In the same transaction, dependents whose dependencies are now all
+    satisfied become ready, and the run's status is refreshed. Returns the
+    ids of the tasks that were released.
 
     Raises:
         StaleLeaseError: the lease was lost; the result is discarded and a
             ``stale_write_rejected`` event is recorded instead.
     """
     ensure_transition(TaskStatus.RUNNING, TaskStatus.SUCCEEDED)
+    run_id = await runs.run_of_task(conn, task_id)
+    if run_id is not None:
+        await runs.lock_run(conn, run_id)  # lock order: run, then task
     row = (
         await conn.execute(
             text(
@@ -337,12 +343,16 @@ async def complete_task(
         type=EventType.TASK_SUCCEEDED,
         payload={"worker_id": str(worker_id), "attempt": row.attempt},
     )
+    released = await runs.release_dependents(conn, run_id=row.run_id, task_id=task_id)
+    await runs.refresh_run_status(conn, row.run_id)
+    return released
 
 
 # --------------------------------------------------------------------- failure
 
-_LOCK_FOR_FAILURE = """
-    SELECT id, run_id, attempt, max_attempts, backoff_policy, params, lease_owner, fencing_token
+_FAILURE_COLUMNS = """
+    SELECT id, run_id, attempt, max_attempts, backoff_policy, params, lease_owner,
+           fencing_token, failure_policy
     FROM task_instances
 """
 
@@ -355,7 +365,7 @@ async def _apply_failure(
     error: Mapping[str, Any],
     rng: random.Random,
 ) -> FailureOutcome:
-    """Requeue with backoff or dead-letter a locked, running task row."""
+    """Retry, dead-letter or fail a locked, running task row (run already locked)."""
     decision = decide_after_failure(
         attempt=row["attempt"],
         max_attempts=row["max_attempts"],
@@ -364,6 +374,8 @@ async def _apply_failure(
         rng=rng,
     )
     error_doc = {"kind": kind.value, "attempt": row["attempt"], **error}
+    run_id: UUID = row["run_id"]
+    task_id: UUID = row["id"]
 
     if isinstance(decision, Requeue):
         ensure_transition(TaskStatus.RUNNING, TaskStatus.READY)
@@ -376,12 +388,12 @@ async def _apply_failure(
                 WHERE id = :id
                 """
             ).bindparams(bindparam("error", type_=JSONB)),
-            {"id": row["id"], "error": error_doc, "delay_s": decision.delay_s},
+            {"id": task_id, "error": error_doc, "delay_s": decision.delay_s},
         )
         await record_event(
             conn,
-            run_id=row["run_id"],
-            task_id=row["id"],
+            run_id=run_id,
+            task_id=task_id,
             type=EventType.TASK_RETRY_SCHEDULED,
             payload={
                 "attempt": row["attempt"],
@@ -391,42 +403,71 @@ async def _apply_failure(
             },
         )
         await notify_task_ready(conn)
-        return FailureOutcome(task_id=row["id"], status=TaskStatus.READY, delay_s=decision.delay_s)
+        return FailureOutcome(task_id=task_id, status=TaskStatus.READY, delay_s=decision.delay_s)
 
     assert isinstance(decision, DeadLetter)  # noqa: S101 - exhaustive union
-    ensure_transition(TaskStatus.RUNNING, TaskStatus.DEAD)
+    policy = FailurePolicy(row["failure_policy"])
+
+    if policy is FailurePolicy.RETRY_THEN_DEAD:
+        ensure_transition(TaskStatus.RUNNING, TaskStatus.DEAD)
+        await _set_final_failure(conn, task_id, TaskStatus.DEAD, error_doc)
+        dead_letter_id = (
+            await conn.execute(
+                text(
+                    "INSERT INTO dead_letters (task_id, reason, payload) "
+                    "VALUES (:task_id, :reason, :payload) RETURNING id"
+                ).bindparams(bindparam("payload", type_=JSONB)),
+                {
+                    "task_id": task_id,
+                    "reason": decision.reason,
+                    "payload": {"params": row["params"], "error": error_doc},
+                },
+            )
+        ).scalar_one()
+        await record_event(
+            conn,
+            run_id=run_id,
+            task_id=task_id,
+            type=EventType.TASK_DEAD_LETTERED,
+            payload={"reason": decision.reason, "dead_letter_id": str(dead_letter_id)},
+        )
+        status = TaskStatus.DEAD
+    else:
+        ensure_transition(TaskStatus.RUNNING, TaskStatus.FAILED)
+        await _set_final_failure(conn, task_id, TaskStatus.FAILED, error_doc)
+        await record_event(
+            conn,
+            run_id=run_id,
+            task_id=task_id,
+            type=EventType.TASK_FAILED,
+            payload={"reason": decision.reason, "failure_policy": policy.value},
+        )
+        if policy is FailurePolicy.CONTINUE:
+            await runs.release_dependents(conn, run_id=run_id, task_id=task_id)
+        else:
+            await runs.cancel_open_tasks(
+                conn, run_id=run_id, reason=f"node failed with fail_run policy: {decision.reason}"
+            )
+        status = TaskStatus.FAILED
+
+    await runs.refresh_run_status(conn, run_id)
+    return FailureOutcome(task_id=task_id, status=status, reason=decision.reason)
+
+
+async def _set_final_failure(
+    conn: AsyncConnection, task_id: UUID, status: TaskStatus, error_doc: Mapping[str, Any]
+) -> None:
     await conn.execute(
         text(
             """
             UPDATE task_instances
-            SET status = 'dead', error = :error, lease_owner = NULL, lease_expires_at = NULL,
+            SET status = :status, error = :error, lease_owner = NULL, lease_expires_at = NULL,
                 updated_at = now()
             WHERE id = :id
             """
         ).bindparams(bindparam("error", type_=JSONB)),
-        {"id": row["id"], "error": error_doc},
+        {"id": task_id, "status": status.value, "error": dict(error_doc)},
     )
-    dead_letter_id = (
-        await conn.execute(
-            text(
-                "INSERT INTO dead_letters (task_id, reason, payload) "
-                "VALUES (:task_id, :reason, :payload) RETURNING id"
-            ).bindparams(bindparam("payload", type_=JSONB)),
-            {
-                "task_id": row["id"],
-                "reason": decision.reason,
-                "payload": {"params": row["params"], "error": error_doc},
-            },
-        )
-    ).scalar_one()
-    await record_event(
-        conn,
-        run_id=row["run_id"],
-        task_id=row["id"],
-        type=EventType.TASK_DEAD_LETTERED,
-        payload={"reason": decision.reason, "dead_letter_id": str(dead_letter_id)},
-    )
-    return FailureOutcome(task_id=row["id"], status=TaskStatus.DEAD, reason=decision.reason)
 
 
 async def fail_task(
@@ -439,21 +480,24 @@ async def fail_task(
     error: Mapping[str, Any],
     rng: random.Random | None = None,
 ) -> FailureOutcome:
-    """Record a failed attempt by the lease holder: retry with backoff or dead-letter.
+    """Record a failed attempt by the lease holder: retry, dead-letter or fail per policy.
 
     Raises:
         StaleLeaseError: the caller no longer holds the lease.
     """
+    run_id = await runs.run_of_task(conn, task_id)
+    if run_id is not None:
+        await runs.lock_run(conn, run_id)
     row = (
         (
             await conn.execute(
                 text(
-                    _LOCK_FOR_FAILURE
+                    _FAILURE_COLUMNS
                     + """
-                WHERE id = :id AND status = 'running'
-                  AND lease_owner = :worker_id AND fencing_token = :token
-                FOR UPDATE
-                """
+                    WHERE id = :id AND status = 'running'
+                      AND lease_owner = :worker_id AND fencing_token = :token
+                    FOR UPDATE
+                    """
                 ),
                 {"id": task_id, "worker_id": worker_id, "token": fencing_token},
             )
@@ -475,7 +519,8 @@ async def release_task(
 
     Returns False if the lease was already lost, in which case there is
     nothing to release. The fencing token is *not* reset, so the releasing
-    worker can never write to the task again.
+    worker can never write to the task again. The run's status is unaffected
+    (the task is still ready to run), so no run lock is needed.
     """
     ensure_transition(TaskStatus.RUNNING, TaskStatus.READY)
     row = (
@@ -521,33 +566,50 @@ async def reap_expired_leases(
 ) -> list[ReapedTask]:
     """Recover running tasks whose lease has lapsed (dead, stalled or partitioned worker).
 
-    Each is requeued with backoff, or dead-lettered if its attempts are spent.
-    Safe to run concurrently from several processes: rows are locked with
-    SKIP LOCKED and the expiry condition is re-checked under the lock, so a
-    lease renewed at the last moment is left alone and no task is reaped twice.
+    Each is retried with backoff, or dead-lettered/failed per its policy once
+    its attempts are spent. Safe to run concurrently from several processes:
+    both the run lock and the task lock are taken with SKIP LOCKED, and the
+    expiry condition is re-checked under the lock, so a lease renewed at the
+    last moment is left alone and no task is reaped twice. A task skipped
+    because its run is busy is simply picked up by the next sweep.
     """
     rng = rng or random.Random()
-    rows = (
-        (
-            await conn.execute(
-                text(
-                    _LOCK_FOR_FAILURE
-                    + """
+    candidates = (
+        await conn.execute(
+            text(
+                """
+                SELECT id, run_id FROM task_instances
                 WHERE status = 'running' AND lease_expires_at < now()
                 ORDER BY lease_expires_at
                 LIMIT :limit
-                FOR UPDATE SKIP LOCKED
                 """
-                ),
-                {"limit": limit},
-            )
+            ),
+            {"limit": limit},
         )
-        .mappings()
-        .all()
-    )
+    ).all()
 
     reaped: list[ReapedTask] = []
-    for row in rows:
+    for candidate in candidates:
+        if await runs.lock_run(conn, candidate.run_id, skip_locked=True) is None:
+            continue
+        row = (
+            (
+                await conn.execute(
+                    text(
+                        _FAILURE_COLUMNS
+                        + """
+                        WHERE id = :id AND status = 'running' AND lease_expires_at < now()
+                        FOR UPDATE SKIP LOCKED
+                        """
+                    ),
+                    {"id": candidate.id},
+                )
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if row is None:
+            continue  # renewed, finished, or being reaped by someone else
         await record_event(
             conn,
             run_id=row["run_id"],
@@ -577,12 +639,30 @@ async def replay_dead_letter(conn: AsyncConnection, dead_letter_id: UUID) -> UUI
     """Return a dead-lettered task to the queue with a fresh attempt budget.
 
     The idempotency key is unchanged, so a side effect that already happened
-    before the task died is not repeated by the replay.
+    before the task died is not repeated by the replay. A workflow run that
+    had stopped on this task resumes.
 
     Raises:
         DeadLetterNotFoundError: unknown id, or already replayed.
+        runs.RunNotCancellableError: the task's run was cancelled.
     """
-    task_id = (
+    found = (
+        await conn.execute(
+            text(
+                "SELECT d.task_id, t.run_id FROM dead_letters d "
+                "JOIN task_instances t ON t.id = d.task_id "
+                "WHERE d.id = :id AND d.replayed_at IS NULL"
+            ),
+            {"id": dead_letter_id},
+        )
+    ).one_or_none()
+    if found is None:
+        raise DeadLetterNotFoundError(f"no open dead letter {dead_letter_id}")
+    run_status = await runs.lock_run(conn, found.run_id)
+    if run_status == RunStatus.CANCELLED:
+        raise runs.RunNotCancellableError(f"run {found.run_id} was cancelled; nothing to resume")
+
+    claimed = (
         await conn.execute(
             text(
                 "UPDATE dead_letters SET replayed_at = now() "
@@ -591,29 +671,27 @@ async def replay_dead_letter(conn: AsyncConnection, dead_letter_id: UUID) -> UUI
             {"id": dead_letter_id},
         )
     ).scalar_one_or_none()
-    if task_id is None:
+    if claimed is None:  # replayed concurrently while we waited for the run lock
         raise DeadLetterNotFoundError(f"no open dead letter {dead_letter_id}")
 
     ensure_transition(TaskStatus.DEAD, TaskStatus.READY)
-    run_id = (
-        await conn.execute(
-            text(
-                """
-                UPDATE task_instances
-                SET status = 'ready', attempt = 0, not_before = now(), updated_at = now()
-                WHERE id = :id AND status = 'dead'
-                RETURNING run_id
-                """
-            ),
-            {"id": task_id},
-        )
-    ).scalar_one()
+    await conn.execute(
+        text(
+            """
+            UPDATE task_instances
+            SET status = 'ready', attempt = 0, not_before = now(), updated_at = now()
+            WHERE id = :id AND status = 'dead'
+            """
+        ),
+        {"id": found.task_id},
+    )
     await record_event(
         conn,
-        run_id=run_id,
-        task_id=task_id,
+        run_id=found.run_id,
+        task_id=found.task_id,
         type=EventType.TASK_REPLAYED,
         payload={"dead_letter_id": str(dead_letter_id)},
     )
+    await runs.refresh_run_status(conn, found.run_id)
     await notify_task_ready(conn)
-    return UUID(str(task_id))
+    return UUID(str(found.task_id))
