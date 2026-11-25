@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-from conductor.core.logging import (
+from quorum.core.logging import (
     JsonFormatter,
     TextFormatter,
     bind_log_context,

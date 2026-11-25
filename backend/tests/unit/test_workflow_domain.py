@@ -8,20 +8,20 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from conductor.domain.dag import DagError, WorkflowDefinition, validate_definition
-from conductor.domain.jsonschema import SchemaError, check_schema, validate
-from conductor.domain.refs import RefError, find_refs, lookup, resolve_refs
-from conductor.domain.run_state import (
+from quorum.domain.dag import DagError, WorkflowDefinition, validate_definition
+from quorum.domain.jsonschema import SchemaError, check_schema, validate
+from quorum.domain.refs import RefError, find_refs, lookup, resolve_refs
+from quorum.domain.run_state import (
     InvalidRunTransitionError,
     RunStatus,
     derive_run_status,
     ensure_run_transition,
 )
-from conductor.domain.task_state import TaskStatus
-from conductor.domain.transform import TransformSpec, apply_transform
-from conductor.samples import sample_definition
-from conductor.tasks import builtin_registry
-from conductor.tasks.pipeline import ReportParams, render_html, render_markdown
+from quorum.domain.task_state import TaskStatus
+from quorum.domain.transform import TransformSpec, apply_transform
+from quorum.samples import sample_definition
+from quorum.tasks import builtin_registry
+from quorum.tasks.pipeline import ReportParams, render_html, render_markdown
 
 
 def wf(*nodes: dict[str, Any]) -> WorkflowDefinition:
@@ -249,7 +249,7 @@ def test_violations_are_reported_with_paths(
 
 
 def test_valid_instances_pass() -> None:
-    from conductor.samples import DEMO_DATASET, ORDER_SCHEMA
+    from quorum.samples import DEMO_DATASET, ORDER_SCHEMA
 
     check_schema(ORDER_SCHEMA)
     assert validate(DEMO_DATASET, ORDER_SCHEMA) == []

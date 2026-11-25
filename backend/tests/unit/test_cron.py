@@ -9,8 +9,8 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from conductor.domain.cron import CronError, load_zone, next_fire, parse_cron, validate_schedule
-from conductor.domain.priority import aging_bonus, effective_priority, worst_case_wait_s
+from quorum.domain.cron import CronError, load_zone, next_fire, parse_cron, validate_schedule
+from quorum.domain.priority import aging_bonus, effective_priority, worst_case_wait_s
 
 NY = ZoneInfo("America/New_York")
 LONDON = ZoneInfo("Europe/London")

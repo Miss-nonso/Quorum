@@ -12,9 +12,9 @@ import asyncpg
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from conductor.domain.backoff import BackoffPolicy
-from conductor.store import tasks as task_store
-from conductor.worker.runtime import Worker, WorkerConfig
+from quorum.domain.backoff import BackoffPolicy
+from quorum.store import tasks as task_store
+from quorum.worker.runtime import Worker, WorkerConfig
 from tests.conftest import eventually
 from tests.integration.helpers import FAST_RETRY, REGISTRY, enqueue, event_types, task_row
 

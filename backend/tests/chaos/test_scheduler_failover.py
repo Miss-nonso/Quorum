@@ -9,15 +9,15 @@ from collections.abc import Callable
 import asyncpg
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from conductor.domain.dag import WorkflowDefinition
-from conductor.store import workflows as wf_store
+from quorum.domain.dag import WorkflowDefinition
+from quorum.store import workflows as wf_store
 from tests.chaos.conftest import Cluster
 from tests.conftest import eventually
 
 LEADER_ENV = {
-    "CONDUCTOR_LEADER_CHECK_INTERVAL_S": "0.3",
-    "CONDUCTOR_LEADER_RETRY_INTERVAL_S": "0.3",
-    "CONDUCTOR_CRON_TICK_S": "0.2",
+    "QUORUM_LEADER_CHECK_INTERVAL_S": "0.3",
+    "QUORUM_LEADER_RETRY_INTERVAL_S": "0.3",
+    "QUORUM_CRON_TICK_S": "0.2",
 }
 
 

@@ -24,7 +24,7 @@ def free_port() -> int:
 async def test_api_exits_within_grace_period_despite_open_streams(
     cluster: Cluster, db: asyncpg.Connection
 ) -> None:
-    cluster.extra_env["CONDUCTOR_SHUTDOWN_GRACE_S"] = "2"
+    cluster.extra_env["QUORUM_SHUTDOWN_GRACE_S"] = "2"
     port = free_port()
     api = cluster.api(port)
     base = f"http://127.0.0.1:{port}"

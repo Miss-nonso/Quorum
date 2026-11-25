@@ -5,7 +5,7 @@
 
 ## Context
 
-Workflow engines usually run user code (Airflow DAG files, Celery tasks, a shell step). Conductor
+Workflow engines usually run user code (Airflow DAG files, Celery tasks, a shell step). Quorum
 has a public demo where anonymous visitors trigger runs, kill workers and flood queues. Running
 their code means sandboxing untrusted code: containers per task, seccomp, network egress
 control, resource quotas and constant vigilance. On a $5–10/month host, one escape compromises
@@ -33,7 +33,7 @@ the box, the database and the demo's reputation.
 
 - The public demo has no code-execution attack surface. The remaining surface is resource use,
   handled by rate limits and run caps (Phase 6).
-- Conductor is less general than a code-running engine. Real deployments that need custom logic
+- Quorum is less general than a code-running engine. Real deployments that need custom logic
   add task types in code and review them like any other code, the same way they would add an
   endpoint.
 - Declarative transforms cover the demo and common ETL shapes (filter, select, sort), not

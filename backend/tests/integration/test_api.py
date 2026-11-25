@@ -11,9 +11,9 @@ import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from conductor.domain.retry import FailureKind
-from conductor.samples import sample_definition
-from conductor.store import tasks as task_store
+from quorum.domain.retry import FailureKind
+from quorum.samples import sample_definition
+from quorum.store import tasks as task_store
 from tests.integration.http_fixture import local_http_server
 
 
@@ -256,9 +256,9 @@ async def test_stats_task_types_and_metrics(client: httpx.AsyncClient) -> None:
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("text/plain; version=0.0.4")
         body = response.text
-        assert 'conductor_tasks{status="ready"} 1' in body
-        assert "# TYPE conductor_lease_expirations_total counter" in body
-        assert 'conductor_task_duration_seconds{quantile="0.95"}' in body
+        assert 'quorum_tasks{status="ready"} 1' in body
+        assert "# TYPE quorum_lease_expirations_total counter" in body
+        assert 'quorum_task_duration_seconds{quantile="0.95"}' in body
 
     openapi = (await client.get("/openapi.json")).json()
     for path in ("/api/v1/workflows", "/api/v1/runs/{run_id}", "/api/v1/stream", "/api/v1/jobs"):
@@ -281,7 +281,7 @@ async def test_cors_allows_the_dashboard_origin(client: httpx.AsyncClient) -> No
 async def test_seed_is_idempotent_and_the_dataset_is_served(
     client: httpx.AsyncClient, engine: AsyncEngine, caplog: pytest.LogCaptureFixture
 ) -> None:
-    from conductor.seed import seed
+    from quorum.seed import seed
 
     caplog.set_level("INFO")  # exercise the log calls too (a bad `extra` key raises)
     assert await seed(engine, dataset_url="http://localhost:8000/api/v1/demo/dataset")

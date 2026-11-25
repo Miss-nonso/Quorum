@@ -13,12 +13,12 @@ import asyncpg
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from conductor.domain.dag import WorkflowDefinition
-from conductor.samples import sample_definition
-from conductor.store import runs as run_store
-from conductor.store import tasks as task_store
-from conductor.store import workflows as wf_store
-from conductor.worker.runtime import Worker, WorkerConfig
+from quorum.domain.dag import WorkflowDefinition
+from quorum.samples import sample_definition
+from quorum.store import runs as run_store
+from quorum.store import tasks as task_store
+from quorum.store import workflows as wf_store
+from quorum.worker.runtime import Worker, WorkerConfig
 from tests.conftest import eventually
 from tests.integration.helpers import REGISTRY
 from tests.integration.http_fixture import local_http_server

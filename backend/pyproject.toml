@@ -1,5 +1,5 @@
 [project]
-name = "conductor"
+name = "quorum"
 version = "0.1.0"
 description = "A distributed job scheduling and workflow engine built on PostgreSQL."
 requires-python = ">=3.12,<3.13"
@@ -15,14 +15,14 @@ dependencies = [
 ]
 
 [project.scripts]
-conductor = "conductor.__main__:main"
+quorum = "quorum.__main__:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/conductor"]
+packages = ["src/quorum"]
 
 [dependency-groups]
 dev = [
@@ -66,7 +66,7 @@ ignore = ["S311"]
 python_version = "3.12"
 strict = true
 mypy_path = "src"
-packages = ["conductor"]
+packages = ["quorum"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
@@ -87,9 +87,9 @@ filterwarnings = ["error"]
 
 # ---------------------------------------------------------------- coverage
 [tool.coverage.run]
-source = ["conductor"]
+source = ["quorum"]
 branch = true
-# Chaos tests run real `conductor worker` processes; measure those too.
+# Chaos tests run real `quorum worker` processes; measure those too.
 # (SIGKILLed processes write no data, so their share is undercounted, not faked.)
 patch = ["subprocess"]
 parallel = true

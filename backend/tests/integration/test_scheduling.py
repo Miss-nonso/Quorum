@@ -11,15 +11,15 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from conductor.core.db import asyncpg_dsn
-from conductor.domain.cron import CronError
-from conductor.domain.dag import WorkflowDefinition
-from conductor.domain.priority import effective_priority
-from conductor.scheduler.leader import LeaderElector
-from conductor.store import aging as aging_store
-from conductor.store import schedules as schedule_store
-from conductor.store import workflows as wf_store
-from conductor.worker.runtime import Worker, WorkerConfig
+from quorum.core.db import asyncpg_dsn
+from quorum.domain.cron import CronError
+from quorum.domain.dag import WorkflowDefinition
+from quorum.domain.priority import effective_priority
+from quorum.scheduler.leader import LeaderElector
+from quorum.store import aging as aging_store
+from quorum.store import schedules as schedule_store
+from quorum.store import workflows as wf_store
+from quorum.worker.runtime import Worker, WorkerConfig
 from tests.conftest import eventually
 from tests.integration.helpers import REGISTRY, enqueue
 

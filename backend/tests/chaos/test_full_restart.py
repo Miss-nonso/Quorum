@@ -1,4 +1,4 @@
-"""Kill every Conductor process mid-run, restart, and require a correct finish."""
+"""Kill every Quorum process mid-run, restart, and require a correct finish."""
 
 from __future__ import annotations
 
@@ -9,9 +9,9 @@ import asyncpg
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from conductor.domain.dag import WorkflowDefinition
-from conductor.store import runs as run_store
-from conductor.store import workflows as wf_store
+from quorum.domain.dag import WorkflowDefinition
+from quorum.store import runs as run_store
+from quorum.store import workflows as wf_store
 from tests.chaos.conftest import Cluster
 from tests.conftest import eventually
 from tests.integration.http_fixture import local_http_server
@@ -36,7 +36,7 @@ async def _status(db: asyncpg.Connection, run_id: object, node: str) -> str:
 async def test_full_system_restart_mid_run_resumes_with_effects_exactly_once(
     cluster: Cluster, engine: AsyncEngine, db: asyncpg.Connection, base_url: str
 ) -> None:
-    cluster.extra_env["CONDUCTOR_HTTP_ALLOWLIST"] = "127.0.0.1"
+    cluster.extra_env["QUORUM_HTTP_ALLOWLIST"] = "127.0.0.1"
     definition = WorkflowDefinition.model_validate(
         {
             "nodes": [

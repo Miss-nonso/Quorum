@@ -8,7 +8,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
  * thing it explains (no overlays, no focus traps). Dismissible at any point;
  * the choice is remembered in this browser.
  */
-const STORAGE_KEY = "conductor-guide-done";
+const STORAGE_KEY = "quorum-guide-done";
 
 export const GUIDE_STEPS = [
   {

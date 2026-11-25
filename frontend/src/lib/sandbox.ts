@@ -2,7 +2,7 @@
  * The visitor's demo sandbox id: random, made in the browser, kept in
  * localStorage so a reload keeps your runs. It identifies nothing about you.
  */
-const KEY = "conductor-sandbox";
+const KEY = "quorum-sandbox";
 let memory: string | null = null;
 
 function fresh(): string {

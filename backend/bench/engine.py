@@ -1,7 +1,7 @@
 """End-to-end engine benchmarks: throughput, claim latency, recovery time.
 
 Runs against a throwaway database on the server in TEST_DATABASE_URL (the
-Compose database by default) with real `conductor worker` processes:
+Compose database by default) with real `quorum worker` processes:
 
     uv run python bench/engine.py [--jobs 5000] [--quick]
 
@@ -28,12 +28,12 @@ from pathlib import Path
 import asyncpg
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from conductor.core.db import asyncpg_dsn
-from conductor.store import tasks as task_store
+from quorum.core.db import asyncpg_dsn
+from quorum.store import tasks as task_store
 
 BACKEND = Path(__file__).resolve().parents[1]
 SERVER = os.environ.get(
-    "TEST_DATABASE_URL", "postgresql+asyncpg://conductor:conductor@localhost:5433/conductor"
+    "TEST_DATABASE_URL", "postgresql+asyncpg://quorum:quorum@localhost:5433/quorum"
 )
 
 
@@ -46,14 +46,14 @@ def processes(
     url: str, env_extra: dict[str, str], *commands: list[str]
 ) -> Iterator[list[subprocess.Popen[bytes]]]:
     env = {
-        **{k: v for k, v in os.environ.items() if not k.startswith("CONDUCTOR_")},
-        "CONDUCTOR_DATABASE_URL": url,
-        "CONDUCTOR_LOG_LEVEL": "WARNING",
+        **{k: v for k, v in os.environ.items() if not k.startswith("QUORUM_")},
+        "QUORUM_DATABASE_URL": url,
+        "QUORUM_LOG_LEVEL": "WARNING",
         **env_extra,
     }
     procs = [
         subprocess.Popen(  # noqa: S603 - our own module, fixed argv
-            [sys.executable, "-m", "conductor", *cmd],
+            [sys.executable, "-m", "quorum", *cmd],
             cwd=BACKEND,
             env=env,
             stdout=subprocess.DEVNULL,
@@ -81,11 +81,11 @@ async def fresh_db() -> tuple[str, str]:
     await admin.execute(f'CREATE DATABASE "{name}"')
     await admin.close()
     url = f"{base}/{name}"
-    env = {**os.environ, "CONDUCTOR_DATABASE_URL": url}
+    env = {**os.environ, "QUORUM_DATABASE_URL": url}
     migrate = await asyncio.create_subprocess_exec(
         sys.executable,
         "-m",
-        "conductor",
+        "quorum",
         "migrate",
         cwd=BACKEND,
         env=env,
@@ -122,7 +122,7 @@ async def bulk_jobs(conn: asyncpg.Connection, n: int, seconds: float = 0.0) -> N
 async def throughput(url: str, jobs: int, workers: int, concurrency: int) -> float:
     conn = await asyncpg.connect(asyncpg_dsn(url))
     await bulk_jobs(conn, jobs)
-    env = {"CONDUCTOR_WORKER_CONCURRENCY": str(concurrency), "CONDUCTOR_POLL_INTERVAL_S": "0.05"}
+    env = {"QUORUM_WORKER_CONCURRENCY": str(concurrency), "QUORUM_POLL_INTERVAL_S": "0.05"}
     started = time.perf_counter()
     with processes(url, env, *[["worker"]] * workers):
         while True:
@@ -165,12 +165,12 @@ async def recovery(
 ) -> list[float]:
     """Seconds from SIGKILL of the worker holding a task to another worker re-claiming it."""
     env = {
-        "CONDUCTOR_LEASE_TTL_S": str(ttl),
-        "CONDUCTOR_HEARTBEAT_INTERVAL_S": str(heartbeat),
-        "CONDUCTOR_REAPER_INTERVAL_S": str(reaper),
-        "CONDUCTOR_POLL_INTERVAL_S": "0.2",
-        "CONDUCTOR_WORKER_UNHEALTHY_AFTER_S": str(max(ttl, 3)),
-        "CONDUCTOR_WORKER_DEAD_AFTER_S": str(max(ttl, 3) * 3),
+        "QUORUM_LEASE_TTL_S": str(ttl),
+        "QUORUM_HEARTBEAT_INTERVAL_S": str(heartbeat),
+        "QUORUM_REAPER_INTERVAL_S": str(reaper),
+        "QUORUM_POLL_INTERVAL_S": "0.2",
+        "QUORUM_WORKER_UNHEALTHY_AFTER_S": str(max(ttl, 3)),
+        "QUORUM_WORKER_DEAD_AFTER_S": str(max(ttl, 3) * 3),
         # The retry backoff after a lost lease is not part of detection: keep it tiny.
     }
     conn = await asyncpg.connect(asyncpg_dsn(url))
@@ -221,7 +221,7 @@ async def main(jobs: int, quick: bool, no_fsync_wait: bool = False) -> None:
         await admin.execute(f'ALTER DATABASE "{name}" SET synchronous_commit = off')
         await admin.close()
     try:
-        print("# Conductor benchmark run\n")
+        print("# Quorum benchmark run\n")
         print(
             f"- Host: {platform.processor() or platform.machine()}, {os.cpu_count()} threads, "
             f"Python {platform.python_version()}, {platform.system()} {platform.release()}"

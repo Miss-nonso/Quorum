@@ -14,12 +14,12 @@ from alembic import context
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from conductor.core.config import get_settings
-from conductor.core.db import engine_args
+from quorum.core.config import get_settings
+from quorum.core.db import engine_args
 
 config = context.config
 
-# `conductor migrate` configures JSON logging itself; only fall back to the
+# `quorum migrate` configures JSON logging itself; only fall back to the
 # ini-file logging when alembic is invoked directly from the CLI.
 if config.config_file_name is not None and not logging.getLogger().handlers:
     logging.config.fileConfig(config.config_file_name, disable_existing_loggers=False)

@@ -5,7 +5,7 @@
 
 ## Context
 
-Conductor makes several choices that are deliberately unusual, such as using PostgreSQL as the
+Quorum makes several choices that are deliberately unusual, such as using PostgreSQL as the
 only queue and broker, and promising at-least-once delivery rather than exactly-once. Without
 the reasoning written down, a reader can't tell a deliberate trade-off from an oversight, and
 future changes can quietly undo decisions that had good reasons behind them.

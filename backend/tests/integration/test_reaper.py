@@ -9,9 +9,9 @@ import asyncpg
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
-from conductor.scheduler.reaper import Reaper, ReaperConfig
-from conductor.store import tasks as task_store
-from conductor.store import workers as worker_store
+from quorum.scheduler.reaper import Reaper, ReaperConfig
+from quorum.store import tasks as task_store
+from quorum.store import workers as worker_store
 from tests.conftest import UNREACHABLE_DB_URL
 from tests.integration.helpers import FAST_RETRY, enqueue
 

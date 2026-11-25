@@ -8,7 +8,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from conductor.samples import DEMO_DATASET
+from quorum.samples import DEMO_DATASET
 
 BAD_ORDERS = [{"id": "ord-x", "customer": "Eve", "total": -1, "status": "stolen"}]
 

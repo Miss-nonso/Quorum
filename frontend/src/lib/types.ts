@@ -1,4 +1,4 @@
-// Mirrors backend/src/conductor/api/schemas.py. Keep in sync.
+// Mirrors backend/src/quorum/api/schemas.py. Keep in sync.
 
 export type TaskStatus = "pending" | "ready" | "running" | "succeeded" | "failed" | "dead" | "cancelled";
 

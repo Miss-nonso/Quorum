@@ -12,11 +12,11 @@ import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from conductor.api.app import create_app
-from conductor.core.config import Settings
-from conductor.demo import service
-from conductor.seed import seed
-from conductor.worker.runtime import Worker, WorkerConfig
+from quorum.api.app import create_app
+from quorum.core.config import Settings
+from quorum.demo import service
+from quorum.seed import seed
+from quorum.worker.runtime import Worker, WorkerConfig
 from tests.conftest import eventually, make_client
 from tests.integration.helpers import REGISTRY
 

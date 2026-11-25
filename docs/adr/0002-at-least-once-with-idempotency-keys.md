@@ -43,7 +43,7 @@ problem), and claiming it would be dishonest.
   ignores idempotency keys can fire twice. `docs/semantics.md` says this explicitly.
 - **The effect commits separately from task completion, in its own transaction.** That is
   deliberate: it models a real external effect, which can never join our transaction. Effects
-  written to Conductor's own tables could share the completion transaction. We don't rely on
+  written to Quorum's own tables could share the completion transaction. We don't rely on
   that, so the guarantee is the same for internal and external effects.
 - The chaos suite proves the claim: it kills a worker after its effect but before its completion
   and asserts that exactly one notification exists.

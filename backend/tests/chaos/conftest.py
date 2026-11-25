@@ -1,4 +1,4 @@
-"""Spawn real Conductor processes so tests can SIGKILL / SIGSTOP them."""
+"""Spawn real Quorum processes so tests can SIGKILL / SIGSTOP them."""
 
 from __future__ import annotations
 
@@ -19,14 +19,14 @@ from tests.conftest import BACKEND_DIR, eventually
 
 # Aggressive timings so recovery happens in a couple of seconds, not minutes.
 CHAOS_ENV = {
-    "CONDUCTOR_LEASE_TTL_S": "1.5",
-    "CONDUCTOR_HEARTBEAT_INTERVAL_S": "0.25",
-    "CONDUCTOR_POLL_INTERVAL_S": "0.2",
-    "CONDUCTOR_REAPER_INTERVAL_S": "0.2",
-    "CONDUCTOR_WORKER_UNHEALTHY_AFTER_S": "1",
-    "CONDUCTOR_WORKER_DEAD_AFTER_S": "3",
-    "CONDUCTOR_SHUTDOWN_GRACE_S": "1",
-    "CONDUCTOR_LOG_FORMAT": "json",
+    "QUORUM_LEASE_TTL_S": "1.5",
+    "QUORUM_HEARTBEAT_INTERVAL_S": "0.25",
+    "QUORUM_POLL_INTERVAL_S": "0.2",
+    "QUORUM_REAPER_INTERVAL_S": "0.2",
+    "QUORUM_WORKER_UNHEALTHY_AFTER_S": "1",
+    "QUORUM_WORKER_DEAD_AFTER_S": "3",
+    "QUORUM_SHUTDOWN_GRACE_S": "1",
+    "QUORUM_LOG_FORMAT": "json",
 }
 
 
@@ -56,16 +56,16 @@ class Cluster:
 
     def _spawn(self, name: str, *args: str) -> Proc:
         env = {
-            **{k: v for k, v in os.environ.items() if not k.startswith("CONDUCTOR_")},
+            **{k: v for k, v in os.environ.items() if not k.startswith("QUORUM_")},
             **CHAOS_ENV,
             **self.extra_env,
-            "CONDUCTOR_DATABASE_URL": self.database_url,
+            "QUORUM_DATABASE_URL": self.database_url,
         }
         log = self.tmp_path / f"{name}.log"
         # The child inherits its own copy of the descriptor; ours can close at once.
         with log.open("wb") as out:
             popen = subprocess.Popen(  # noqa: S603 - fixed argv, our own module
-                [sys.executable, "-m", "conductor", *args],
+                [sys.executable, "-m", "quorum", *args],
                 cwd=BACKEND_DIR,
                 env=env,
                 stdout=out,
@@ -89,7 +89,7 @@ class Cluster:
         return proc
 
     def api(self, port: int) -> Proc:
-        self.extra_env["CONDUCTOR_API_PORT"] = str(port)
+        self.extra_env["QUORUM_API_PORT"] = str(port)
         return self._spawn("api", "api")
 
     def scheduler(self) -> Proc:

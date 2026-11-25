@@ -92,7 +92,7 @@ function ThemeToggle() {
       onClick={() => {
         document.documentElement.dataset.theme = next;
         try {
-          localStorage.setItem("conductor-theme", next);
+          localStorage.setItem("quorum-theme", next);
         } catch {
           // storage unavailable (private mode): the choice lasts for this page only
         }
@@ -186,7 +186,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span className="grid size-7 place-items-center rounded-lg bg-accent text-accent-fg">
               <Activity aria-hidden="true" className="size-4" />
             </span>
-            Conductor
+            Quorum
           </Link>
           <span className="hidden text-sm text-muted md:inline">
             Distributed workflow engine on PostgreSQL

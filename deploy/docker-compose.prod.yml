@@ -5,27 +5,27 @@
 #   docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d
 #
 # Secrets come only from the environment file (never committed).
-name: conductor
+name: quorum
 
 x-backend: &backend
-  image: ${CONDUCTOR_IMAGE:-ghcr.io/OWNER/conductor-backend:latest}
+  image: ${QUORUM_IMAGE:-ghcr.io/miss-nonso/quorum-backend:latest}
   restart: unless-stopped
   environment: &backend-env
-    CONDUCTOR_ENV: production
-    CONDUCTOR_DATABASE_URL: postgresql+asyncpg://conductor:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/conductor
-    CONDUCTOR_LOG_FORMAT: json
-    CONDUCTOR_LOG_LEVEL: ${CONDUCTOR_LOG_LEVEL:-INFO}
-    CONDUCTOR_DEMO_MODE: "true"
-    CONDUCTOR_DEMO_DATASET_URL: http://api:8000/api/v1/demo/dataset
-    CONDUCTOR_HTTP_ALLOWLIST: api
-    CONDUCTOR_CORS_ORIGINS: ${DASHBOARD_ORIGIN:?set DASHBOARD_ORIGIN, e.g. https://conductor.example.com}
-    CONDUCTOR_LEASE_TTL_S: "6"
-    CONDUCTOR_HEARTBEAT_INTERVAL_S: "1"
-    CONDUCTOR_REAPER_INTERVAL_S: "1"
-    CONDUCTOR_WORKER_UNHEALTHY_AFTER_S: "3"
-    CONDUCTOR_WORKER_DEAD_AFTER_S: "8"
-    CONDUCTOR_DEMO_RETENTION_S: "1800"
-    CONDUCTOR_DEMO_RESET_INTERVAL_S: "300"
+    QUORUM_ENV: production
+    QUORUM_DATABASE_URL: postgresql+asyncpg://quorum:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/quorum
+    QUORUM_LOG_FORMAT: json
+    QUORUM_LOG_LEVEL: ${QUORUM_LOG_LEVEL:-INFO}
+    QUORUM_DEMO_MODE: "true"
+    QUORUM_DEMO_DATASET_URL: http://api:8000/api/v1/demo/dataset
+    QUORUM_HTTP_ALLOWLIST: api
+    QUORUM_CORS_ORIGINS: ${DASHBOARD_ORIGIN:?set DASHBOARD_ORIGIN, e.g. https://quorum.example.com}
+    QUORUM_LEASE_TTL_S: "6"
+    QUORUM_HEARTBEAT_INTERVAL_S: "1"
+    QUORUM_REAPER_INTERVAL_S: "1"
+    QUORUM_WORKER_UNHEALTHY_AFTER_S: "3"
+    QUORUM_WORKER_DEAD_AFTER_S: "8"
+    QUORUM_DEMO_RETENTION_S: "1800"
+    QUORUM_DEMO_RESET_INTERVAL_S: "300"
   logging:
     driver: json-file
     options: { max-size: "10m", max-file: "3" }
@@ -35,16 +35,16 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: conductor
+      POSTGRES_USER: quorum
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
-      POSTGRES_DB: conductor
+      POSTGRES_DB: quorum
     # No published port: only services on this network can reach the database.
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./backups:/backups
     command: ["postgres", "-c", "shared_buffers=256MB", "-c", "max_connections=100"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U conductor -d conductor"]
+      test: ["CMD-SHELL", "pg_isready -U quorum -d quorum"]
       interval: 5s
       timeout: 3s
       retries: 30
@@ -53,21 +53,21 @@ services:
 
   migrate:
     <<: *backend
-    command: ["conductor", "migrate"]
+    command: ["quorum", "migrate"]
     restart: "no"
     healthcheck: { disable: true }
     depends_on: { db: { condition: service_healthy } }
 
   seed:
     <<: *backend
-    command: ["conductor", "seed"]
+    command: ["quorum", "seed"]
     restart: "no"
     healthcheck: { disable: true }
     depends_on: { migrate: { condition: service_completed_successfully } }
 
   api:
     <<: *backend
-    command: ["conductor", "api"]
+    command: ["quorum", "api"]
     environment:
       <<: *backend-env
       # Trust X-Forwarded-For only because the API is reachable solely through Caddy.
@@ -79,7 +79,7 @@ services:
   # Two schedulers: one leads (advisory lock), the other takes over if it dies.
   scheduler:
     <<: *backend
-    command: ["conductor", "scheduler"]
+    command: ["quorum", "scheduler"]
     healthcheck: { disable: true }
     depends_on: { migrate: { condition: service_completed_successfully } }
     deploy:
@@ -89,11 +89,11 @@ services:
   # The demo pool: chaos-enabled, restarted after every "kill a worker".
   worker:
     <<: *backend
-    command: ["conductor", "worker"]
+    command: ["quorum", "worker"]
     environment:
       <<: *backend-env
-      CONDUCTOR_DEMO_CHAOS: "true"
-      CONDUCTOR_WORKER_CONCURRENCY: "4"
+      QUORUM_DEMO_CHAOS: "true"
+      QUORUM_WORKER_CONCURRENCY: "4"
     healthcheck: { disable: true }
     stop_grace_period: 30s
     depends_on: { migrate: { condition: service_completed_successfully } }
@@ -106,7 +106,7 @@ services:
     restart: unless-stopped
     ports: ["80:80", "443:443", "443:443/udp"]
     environment:
-      API_DOMAIN: ${API_DOMAIN:?set API_DOMAIN, e.g. api.conductor.example.com}
+      API_DOMAIN: ${API_DOMAIN:?set API_DOMAIN, e.g. api.quorum.example.com}
       ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL for Let's Encrypt}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro

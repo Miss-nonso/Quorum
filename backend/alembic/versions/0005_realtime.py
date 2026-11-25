@@ -24,10 +24,10 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     op.execute(
         """
-        CREATE FUNCTION conductor_notify_events() RETURNS trigger
+        CREATE FUNCTION quorum_notify_events() RETURNS trigger
         LANGUAGE plpgsql AS $$
         BEGIN
-            PERFORM pg_notify('conductor_events', '');
+            PERFORM pg_notify('quorum_events', '');
             RETURN NULL;
         END
         $$
@@ -37,7 +37,7 @@ def upgrade() -> None:
         """
         CREATE TRIGGER run_events_notify
         AFTER INSERT ON run_events
-        FOR EACH STATEMENT EXECUTE FUNCTION conductor_notify_events()
+        FOR EACH STATEMENT EXECUTE FUNCTION quorum_notify_events()
         """
     )
     # Metrics and the overview chart look at recent windows of events by type.
@@ -47,4 +47,4 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute("DROP INDEX IF EXISTS run_events_type_at_idx")
     op.execute("DROP TRIGGER IF EXISTS run_events_notify ON run_events")
-    op.execute("DROP FUNCTION IF EXISTS conductor_notify_events()")
+    op.execute("DROP FUNCTION IF EXISTS quorum_notify_events()")

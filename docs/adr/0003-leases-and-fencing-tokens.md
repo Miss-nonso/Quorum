@@ -48,7 +48,7 @@ election.
   uses short values so recovery is visible within seconds.
 - **The lease TTL sets the patience for slow-but-alive workers.** A worker that can't heartbeat
   for `lease_ttl_s` loses its tasks even if it would have finished them.
-- **Fencing protects only writes that go through Conductor.** A zombie's external side effect
+- **Fencing protects only writes that go through Quorum.** A zombie's external side effect
   (say, an HTTP call made after it lost its lease) can't be fenced by our database. That is what
   idempotency keys are for (ADR 0002).
 - **Tested by** `tests/integration/test_task_store.py` (stale tokens rejected, last-moment

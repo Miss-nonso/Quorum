@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from conductor.domain.backoff import BackoffPolicy
-from conductor.tasks import builtin_registry
-from conductor.tasks.basic import SLEEP
-from conductor.worker.registry import InvalidParamsError, TaskRegistry, UnknownTaskTypeError
+from quorum.domain.backoff import BackoffPolicy
+from quorum.tasks import builtin_registry
+from quorum.tasks.basic import SLEEP
+from quorum.worker.registry import InvalidParamsError, TaskRegistry, UnknownTaskTypeError
 
 
 def test_builtin_registry_exposes_only_the_known_types() -> None:
@@ -63,11 +63,11 @@ def test_duplicate_registration_is_an_error() -> None:
 
 
 def test_timing_settings_are_cross_validated() -> None:
-    from conductor.core.config import Settings
+    from quorum.core.config import Settings
 
     with pytest.raises(ValueError, match="half of lease_ttl_s"):
-        Settings.from_env({"CONDUCTOR_LEASE_TTL_S": "5", "CONDUCTOR_HEARTBEAT_INTERVAL_S": "3"})
+        Settings.from_env({"QUORUM_LEASE_TTL_S": "5", "QUORUM_HEARTBEAT_INTERVAL_S": "3"})
     with pytest.raises(ValueError, match="less than worker_dead_after_s"):
         Settings.from_env(
-            {"CONDUCTOR_WORKER_UNHEALTHY_AFTER_S": "60", "CONDUCTOR_WORKER_DEAD_AFTER_S": "30"}
+            {"QUORUM_WORKER_UNHEALTHY_AFTER_S": "60", "QUORUM_WORKER_DEAD_AFTER_S": "30"}
         )

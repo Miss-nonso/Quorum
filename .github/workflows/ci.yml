@@ -39,15 +39,15 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: conductor
-          POSTGRES_PASSWORD: conductor
-          POSTGRES_DB: conductor
+          POSTGRES_USER: quorum
+          POSTGRES_PASSWORD: quorum
+          POSTGRES_DB: quorum
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U conductor -d conductor"
+          --health-cmd "pg_isready -U quorum -d quorum"
           --health-interval 2s --health-timeout 3s --health-retries 30
     env:
-      TEST_DATABASE_URL: postgresql+asyncpg://conductor:conductor@localhost:5432/conductor
+      TEST_DATABASE_URL: postgresql+asyncpg://quorum:quorum@localhost:5432/quorum
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -60,7 +60,7 @@ jobs:
       - name: Coverage gate (domain, worker, scheduler, store >= 85%)
         run: >-
           uv run coverage report --fail-under=85
-          --include='src/conductor/domain/*,src/conductor/worker/*,src/conductor/scheduler/*,src/conductor/store/*'
+          --include='src/quorum/domain/*,src/quorum/worker/*,src/quorum/scheduler/*,src/quorum/store/*'
 
   frontend:
     name: Dashboard · lint, types, tests, build
@@ -93,15 +93,15 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: conductor
-          POSTGRES_PASSWORD: conductor
-          POSTGRES_DB: conductor
+          POSTGRES_USER: quorum
+          POSTGRES_PASSWORD: quorum
+          POSTGRES_DB: quorum
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U conductor -d conductor"
+          --health-cmd "pg_isready -U quorum -d quorum"
           --health-interval 2s --health-timeout 3s --health-retries 30
     env:
-      CONDUCTOR_DATABASE_URL: postgresql+asyncpg://conductor:conductor@localhost:5432/conductor
+      QUORUM_DATABASE_URL: postgresql+asyncpg://quorum:quorum@localhost:5432/quorum
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -148,7 +148,7 @@ jobs:
         with:
           context: frontend
           push: false
-          tags: conductor-dashboard:ci
+          tags: quorum-dashboard:ci
           cache-from: type=gha,scope=dashboard
           cache-to: type=gha,mode=max,scope=dashboard
 
@@ -162,6 +162,6 @@ jobs:
         with:
           context: backend
           push: false
-          tags: conductor-backend:ci
+          tags: quorum-backend:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max

@@ -1,6 +1,6 @@
 """Benchmark: where should priority aging be computed?
 
-A. **Periodic update** (what Conductor does): a leader job rewrites
+A. **Periodic update** (what Quorum does): a leader job rewrites
    ``effective_priority``; the claim query orders by the stored column and
    walks the partial index ``(effective_priority DESC, created_at)``.
 B. **At claim time**: the claim query orders by
@@ -26,7 +26,7 @@ import time
 
 import asyncpg
 
-from conductor.core.db import asyncpg_dsn
+from quorum.core.db import asyncpg_dsn
 
 CLAIM_A = """
 WITH c AS (
@@ -75,7 +75,7 @@ def summary(name: str, samples: list[float]) -> str:
 async def main(rows: int, claims: int) -> None:
     server = asyncpg_dsn(
         os.environ.get(
-            "TEST_DATABASE_URL", "postgresql+asyncpg://conductor:conductor@localhost:5433/conductor"
+            "TEST_DATABASE_URL", "postgresql+asyncpg://quorum:quorum@localhost:5433/quorum"
         )
     )
     name = f"bench_{secrets.token_hex(4)}"
@@ -83,7 +83,7 @@ async def main(rows: int, claims: int) -> None:
     await admin.execute(f'CREATE DATABASE "{name}"')
     try:
         dsn = server.rsplit("/", 1)[0] + f"/{name}"
-        os.environ["CONDUCTOR_DATABASE_URL"] = "postgresql+asyncpg" + dsn[len("postgresql") :]
+        os.environ["QUORUM_DATABASE_URL"] = "postgresql+asyncpg" + dsn[len("postgresql") :]
         proc = await asyncio.create_subprocess_exec("alembic", "upgrade", "head", cwd=".")
         await proc.wait()
         conn = await asyncpg.connect(dsn)

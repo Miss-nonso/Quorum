@@ -5,7 +5,7 @@ import httpx
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 
-from conductor import __version__
+from quorum import __version__
 from tests.conftest import BACKEND_DIR
 
 

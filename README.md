@@ -1,14 +1,14 @@
-# Conductor
+# Quorum
 
-[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
-[![Release](https://github.com/OWNER/REPO/actions/workflows/release.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/release.yml)
+[![CI](https://github.com/Miss-nonso/Quorum/actions/workflows/ci.yml/badge.svg)](https://github.com/Miss-nonso/Quorum/actions/workflows/ci.yml)
+[![Release](https://github.com/Miss-nonso/Quorum/actions/workflows/release.yml/badge.svg)](https://github.com/Miss-nonso/Quorum/actions/workflows/release.yml)
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
 ![PostgreSQL 16](https://img.shields.io/badge/postgres-16-336791)
 
 **A distributed job scheduler and workflow engine built on nothing but PostgreSQL. Kill a worker
 mid-task and watch the work finish somewhere else, exactly once.**
 
-**[Live demo →](https://conductor.example.com)** · no sign-up · [API docs](https://api.conductor.example.com/docs)
+**[Live demo →](https://quorum.example.com)** · no sign-up · [API docs](https://api.quorum.example.com/docs)
 
 ![Killing a worker mid-run: the task is recovered by another worker and the run succeeds](docs/assets/demo.gif)
 
@@ -78,7 +78,7 @@ Without containers (uses the Compose database on port 5433): `make dev-host` for
 
 ## Deploy for free
 
-Vercel (dashboard) + Render (backend, one free web service running `conductor all`) + Neon (free
+Vercel (dashboard) + Render (backend, one free web service running `quorum all`) + Neon (free
 Postgres): **$0/month**, with a Render Blueprint (`render.yaml`) included. The trade-off is that
 the free server sleeps when idle, and the first visitor waits about a minute while it wakes (the
 dashboard explains this). Step by step: [docs/deployment-free.md](docs/deployment-free.md). For
@@ -162,7 +162,7 @@ Method, hardware and how to reproduce: [docs/benchmarks.md](docs/benchmarks.md).
 
 | Path | Contents |
 | --- | --- |
-| `backend/src/conductor/` | `domain/` (pure), `store/` (SQL), `worker/`, `scheduler/`, `api/`, `tasks/`, `demo/` |
+| `backend/src/quorum/` | `domain/` (pure), `store/` (SQL), `worker/`, `scheduler/`, `api/`, `tasks/`, `demo/` |
 | `backend/tests/` | `unit/`, `integration/` (real Postgres), `chaos/` (real processes, SIGKILL/SIGSTOP) |
 | `backend/bench/` | Benchmarks |
 | `frontend/` | Next.js dashboard, Vitest and Playwright + axe |

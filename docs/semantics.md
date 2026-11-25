@@ -1,11 +1,11 @@
 # Delivery semantics and failure model
 
-This page states precisely what Conductor guarantees and what it does not. Each guarantee names
+This page states precisely what Quorum guarantees and what it does not. Each guarantee names
 the test that fails if it stops being true. *Status: covers Phases 1–3 (queue, workflows, scheduling).*
 
 ## Failure model
 
-Conductor tolerates:
+Quorum tolerates:
 
 - **Worker crashes at any instant** (SIGKILL, OOM, host loss), including between a task's side
   effect and its completion report.
@@ -15,7 +15,7 @@ Conductor tolerates:
 - **Concurrent schedulers and reapers.** Recovery is safe without a leader.
 - **Restarts of any process.** No correctness-relevant state lives in process memory.
 
-Conductor assumes:
+Quorum assumes:
 
 - **PostgreSQL is durable and consistent.** It is a single primary; failover of the database
   itself is out of scope for v1.

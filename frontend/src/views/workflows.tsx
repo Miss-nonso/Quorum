@@ -85,7 +85,7 @@ export function WorkflowsView() {
           description={
             <>
               Create one with <code className="font-mono">POST /api/v1/workflows</code>, or run{" "}
-              <code className="font-mono">conductor seed</code> to load the sample pipeline.
+              <code className="font-mono">quorum seed</code> to load the sample pipeline.
             </>
           }
         />

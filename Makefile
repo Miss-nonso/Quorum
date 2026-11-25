@@ -1,11 +1,11 @@
-# Conductor developer commands. Run `make help` for the list.
+# Quorum developer commands. Run `make help` for the list.
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 COMPOSE := docker compose -f deploy/docker-compose.yml
 UV      := cd backend && uv run
 # The engine's core packages must stay at or above this line coverage.
-COV_CORE := src/conductor/domain/*,src/conductor/worker/*,src/conductor/scheduler/*,src/conductor/store/*
+COV_CORE := src/quorum/domain/*,src/quorum/worker/*,src/quorum/scheduler/*,src/quorum/store/*
 
 .PHONY: help
 help: ## Show available targets
@@ -33,7 +33,7 @@ db: ## Start only PostgreSQL and wait until it is healthy
 
 .PHONY: migrate
 migrate: db ## Apply migrations to the local database from the host
-	$(UV) conductor migrate
+	$(UV) quorum migrate
 
 .PHONY: fmt
 fmt: ## Auto-format and apply safe lint fixes
@@ -68,7 +68,7 @@ check: lint typecheck test ## Everything CI runs on the backend
 
 # ---------------------------------------------------------------- frontend
 FE := cd frontend && npm run
-E2E_DATABASE_URL ?= postgresql+asyncpg://conductor:conductor@localhost:5433/conductor
+E2E_DATABASE_URL ?= postgresql+asyncpg://quorum:quorum@localhost:5433/quorum
 
 .PHONY: fe-install
 fe-install: ## Install dashboard dependencies
@@ -88,7 +88,7 @@ fe-check: ## Dashboard lint, format, types, unit/component tests, production bui
 
 .PHONY: e2e
 e2e: db ## Playwright end to end against a real backend (starts API, scheduler, workers)
-	CONDUCTOR_DATABASE_URL=$(E2E_DATABASE_URL) ./scripts/e2e.sh
+	QUORUM_DATABASE_URL=$(E2E_DATABASE_URL) ./scripts/e2e.sh
 
 .PHONY: bench
 bench: db ## Run the benchmarks (see docs/benchmarks.md)

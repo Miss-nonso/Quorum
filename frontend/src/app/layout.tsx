@@ -6,7 +6,7 @@ import { Providers } from "@/components/providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: { default: "Conductor", template: "%s · Conductor" },
+  title: { default: "Quorum", template: "%s · Quorum" },
   description:
     "A distributed job scheduling and workflow engine built on PostgreSQL. Kill a worker and watch it recover.",
 };
@@ -20,7 +20,7 @@ export const viewport: Viewport = {
 
 // Runs before first paint: apply the saved or system theme, and whether the demo guide was
 // dismissed, so neither causes a flash or a layout shift.
-const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem("conductor-theme");if(t!=="light"&&t!=="dark"){t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.dataset.theme=t;document.documentElement.dataset.guide=localStorage.getItem("conductor-guide-done")==="1"?"done":"todo"}catch(e){}})();`;
+const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem("quorum-theme");if(t!=="light"&&t!=="dark"){t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.dataset.theme=t;document.documentElement.dataset.guide=localStorage.getItem("quorum-guide-done")==="1"?"done":"todo"}catch(e){}})();`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

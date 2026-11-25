@@ -1,4 +1,4 @@
-"""`conductor all`: the whole backend in one container (free hosting tiers)."""
+"""`quorum all`: the whole backend in one container (free hosting tiers)."""
 
 from __future__ import annotations
 
@@ -37,11 +37,11 @@ async def test_all_in_one_runs_the_demo_and_respawns_killed_workers(
     cluster.extra_env.update(
         {
             "PORT": str(port),
-            "CONDUCTOR_DEMO_MODE": "true",
-            "CONDUCTOR_DEMO_CHAOS": "true",
-            "CONDUCTOR_DEMO_STEP_DELAY_S": "0.3",
-            "CONDUCTOR_ALL_IN_ONE_WORKERS": "2",
-            "CONDUCTOR_SHUTDOWN_GRACE_S": "3",
+            "QUORUM_DEMO_MODE": "true",
+            "QUORUM_DEMO_CHAOS": "true",
+            "QUORUM_DEMO_STEP_DELAY_S": "0.3",
+            "QUORUM_ALL_IN_ONE_WORKERS": "2",
+            "QUORUM_SHUTDOWN_GRACE_S": "3",
         }
     )
     proc = cluster._spawn("all-in-one", "all")

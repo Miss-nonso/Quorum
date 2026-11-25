@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from conductor.demo.limits import SlidingWindowLimiter
+from quorum.demo.limits import SlidingWindowLimiter
 
 
 class FakeClock:

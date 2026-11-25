@@ -26,7 +26,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       headers: { "Content-Type": "application/json", "X-Sandbox-Id": sandboxId(), ...init?.headers },
     });
   } catch {
-    throw new ApiError(0, "network_error", "Can't reach the Conductor API.", null);
+    throw new ApiError(0, "network_error", "Can't reach the Quorum API.", null);
   }
   if (!response.ok) {
     let body: { error?: { code?: string; message?: string; request_id?: string; details?: unknown } } = {};

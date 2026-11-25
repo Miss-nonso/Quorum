@@ -5,7 +5,7 @@ import { expectAccessible } from "./a11y";
 test.describe("dashboard smoke @mobile", () => {
   for (const theme of ["light", "dark"] as const) {
     test(`overview is live and accessible (${theme})`, async ({ page }) => {
-      await page.addInitScript((t) => localStorage.setItem("conductor-theme", t), theme);
+      await page.addInitScript((t) => localStorage.setItem("quorum-theme", t), theme);
       await page.goto("/overview");
       await expect(page.getByRole("heading", { level: 1, name: "Overview" })).toBeVisible();
       await expect(page.getByRole("status").filter({ hasText: "Live" })).toBeVisible();

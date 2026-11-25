@@ -26,13 +26,13 @@ from fastapi import FastAPI
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
-from conductor.api.app import create_app
-from conductor.core.config import Settings
-from conductor.core.db import asyncpg_dsn
+from quorum.api.app import create_app
+from quorum.core.config import Settings
+from quorum.core.db import asyncpg_dsn
 
 # Port 1 is reserved and never listening: connections fail immediately.
 UNREACHABLE_DB_URL = "postgresql+asyncpg://nobody:nobody@127.0.0.1:1/none"
-DEFAULT_TEST_URL = "postgresql+asyncpg://conductor:conductor@localhost:5433/conductor"
+DEFAULT_TEST_URL = "postgresql+asyncpg://quorum:quorum@localhost:5433/quorum"
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 ENGINE_TABLES = (
     "notifications",

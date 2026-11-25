@@ -128,9 +128,7 @@ function PreviewRun() {
   });
   if (workflow.isPending) return <Skeleton className="h-80 w-full" />;
   if (!workflow.data) {
-    return (
-      <p className="text-sm text-muted">The sample workflow isn&apos;t installed. Run `conductor seed`.</p>
-    );
+    return <p className="text-sm text-muted">The sample workflow isn&apos;t installed. Run `quorum seed`.</p>;
   }
   return (
     <DagView
@@ -345,7 +343,7 @@ function DemoBody() {
           Kill a worker. Watch nothing get lost.
         </h1>
         <p className="max-w-2xl text-muted">
-          Conductor is a distributed workflow engine built on nothing but PostgreSQL. Run the sample pipeline,
+          Quorum is a distributed workflow engine built on nothing but PostgreSQL. Run the sample pipeline,
           then crash a worker, flood the queue or inject failures, and watch it recover live.
         </p>
         <div className="flex flex-wrap items-center gap-3">
@@ -370,7 +368,7 @@ function DemoBody() {
         {demoOff ? (
           <p className="text-sm text-muted">
             Demo controls are turned off on this deployment (set{" "}
-            <code className="font-mono">CONDUCTOR_DEMO_MODE=true</code>).
+            <code className="font-mono">QUORUM_DEMO_MODE=true</code>).
           </p>
         ) : null}
       </section>

@@ -2,51 +2,51 @@
 # Dashboard http://localhost:3000 · API http://localhost:8000 (docs at /docs).
 # Runs the public-demo experience: seeded sample workflow, chaos-enabled workers.
 # Development defaults only; production uses docker-compose.prod.yml.
-name: conductor
+name: quorum
 
 x-backend: &backend
   build:
     context: ../backend
-  image: conductor-backend:dev
+  image: quorum-backend:dev
   environment: &backend-env
-    CONDUCTOR_ENV: development
-    CONDUCTOR_DATABASE_URL: postgresql+asyncpg://conductor:conductor@db:5432/conductor
-    CONDUCTOR_LOG_LEVEL: ${CONDUCTOR_LOG_LEVEL:-INFO}
-    CONDUCTOR_LOG_FORMAT: ${CONDUCTOR_LOG_FORMAT:-json}
-    CONDUCTOR_DEMO_MODE: "true"
-    CONDUCTOR_DEMO_DATASET_URL: http://api:8000/api/v1/demo/dataset
-    CONDUCTOR_HTTP_ALLOWLIST: api,localhost,127.0.0.1
-    CONDUCTOR_CORS_ORIGINS: http://localhost:3000
+    QUORUM_ENV: development
+    QUORUM_DATABASE_URL: postgresql+asyncpg://quorum:quorum@db:5432/quorum
+    QUORUM_LOG_LEVEL: ${QUORUM_LOG_LEVEL:-INFO}
+    QUORUM_LOG_FORMAT: ${QUORUM_LOG_FORMAT:-json}
+    QUORUM_DEMO_MODE: "true"
+    QUORUM_DEMO_DATASET_URL: http://api:8000/api/v1/demo/dataset
+    QUORUM_HTTP_ALLOWLIST: api,localhost,127.0.0.1
+    QUORUM_CORS_ORIGINS: http://localhost:3000
     # Demo-friendly timings: a killed worker's task is recovered within seconds.
-    CONDUCTOR_LEASE_TTL_S: "6"
-    CONDUCTOR_HEARTBEAT_INTERVAL_S: "1"
-    CONDUCTOR_REAPER_INTERVAL_S: "1"
-    CONDUCTOR_WORKER_UNHEALTHY_AFTER_S: "3"
-    CONDUCTOR_WORKER_DEAD_AFTER_S: "8"
-    CONDUCTOR_AGING_INTERVAL_S: "1"
-    CONDUCTOR_AGING_TICK_S: "1"
+    QUORUM_LEASE_TTL_S: "6"
+    QUORUM_HEARTBEAT_INTERVAL_S: "1"
+    QUORUM_REAPER_INTERVAL_S: "1"
+    QUORUM_WORKER_UNHEALTHY_AFTER_S: "3"
+    QUORUM_WORKER_DEAD_AFTER_S: "8"
+    QUORUM_AGING_INTERVAL_S: "1"
+    QUORUM_AGING_TICK_S: "1"
 
 services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: conductor
-      POSTGRES_PASSWORD: conductor
-      POSTGRES_DB: conductor
+      POSTGRES_USER: quorum
+      POSTGRES_PASSWORD: quorum
+      POSTGRES_DB: quorum
     ports:
       # 5433 on the host avoids clashing with a locally installed PostgreSQL.
-      - "127.0.0.1:${CONDUCTOR_DB_HOST_PORT:-5433}:5432"
+      - "127.0.0.1:${QUORUM_DB_HOST_PORT:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U conductor -d conductor"]
+      test: ["CMD-SHELL", "pg_isready -U quorum -d quorum"]
       interval: 2s
       timeout: 3s
       retries: 30
 
   migrate:
     <<: *backend
-    command: ["conductor", "migrate"]
+    command: ["quorum", "migrate"]
     restart: "no"
     healthcheck:
       disable: true
@@ -56,7 +56,7 @@ services:
 
   seed:
     <<: *backend
-    command: ["conductor", "seed"]
+    command: ["quorum", "seed"]
     restart: "no"
     healthcheck:
       disable: true
@@ -66,16 +66,16 @@ services:
 
   api:
     <<: *backend
-    command: ["conductor", "api"]
+    command: ["quorum", "api"]
     ports:
-      - "127.0.0.1:${CONDUCTOR_API_HOST_PORT:-8000}:8000"
+      - "127.0.0.1:${QUORUM_API_HOST_PORT:-8000}:8000"
     depends_on:
       seed:
         condition: service_completed_successfully
 
   scheduler:
     <<: *backend
-    command: ["conductor", "scheduler"]
+    command: ["quorum", "scheduler"]
     healthcheck:
       disable: true  # no HTTP port; leadership is visible in /api/v1/stats
     depends_on:
@@ -85,11 +85,11 @@ services:
   # More workers: docker compose -f deploy/docker-compose.yml up --scale worker=5
   worker:
     <<: *backend
-    command: ["conductor", "worker"]
+    command: ["quorum", "worker"]
     environment:
       <<: *backend-env
-      CONDUCTOR_WORKER_CONCURRENCY: ${CONDUCTOR_WORKER_CONCURRENCY:-4}
-      CONDUCTOR_DEMO_CHAOS: "true"
+      QUORUM_WORKER_CONCURRENCY: ${QUORUM_WORKER_CONCURRENCY:-4}
+      QUORUM_DEMO_CHAOS: "true"
     # The demo's "kill a worker" exits the process; Docker brings it back as a new worker.
     restart: unless-stopped
     deploy:
@@ -105,10 +105,10 @@ services:
     build:
       context: ../frontend
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:${CONDUCTOR_API_HOST_PORT:-8000}
-    image: conductor-dashboard:dev
+        NEXT_PUBLIC_API_URL: http://localhost:${QUORUM_API_HOST_PORT:-8000}
+    image: quorum-dashboard:dev
     ports:
-      - "127.0.0.1:${CONDUCTOR_DASHBOARD_HOST_PORT:-3000}:3000"
+      - "127.0.0.1:${QUORUM_DASHBOARD_HOST_PORT:-3000}:3000"
     depends_on:
       - api
 

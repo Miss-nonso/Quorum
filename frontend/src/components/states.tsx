@@ -51,7 +51,7 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
       <p className="font-medium">{unreachable ? "Can't reach the API" : "Something went wrong"}</p>
       <p className="max-w-md text-sm text-muted">
         {unreachable
-          ? "The Conductor API isn't responding. On free hosting it may be waking up (up to a minute) or restarting; this page retries automatically."
+          ? "The Quorum API isn't responding. On free hosting it may be waking up (up to a minute) or restarting; this page retries automatically."
           : error instanceof Error
             ? error.message
             : "An unexpected error occurred."}

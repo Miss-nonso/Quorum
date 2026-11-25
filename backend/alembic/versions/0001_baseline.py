@@ -32,7 +32,7 @@ def upgrade() -> None:
         DO $$
         BEGIN
             IF current_setting('server_version_num')::int < {MIN_SERVER_VERSION_NUM} THEN
-                RAISE EXCEPTION 'Conductor requires PostgreSQL 16 or newer (found %)',
+                RAISE EXCEPTION 'Quorum requires PostgreSQL 16 or newer (found %)',
                     current_setting('server_version');
             END IF;
             EXECUTE format('ALTER DATABASE %I SET timezone TO ''UTC''', current_database());

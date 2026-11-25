@@ -9,7 +9,7 @@ import { expectAccessible } from "./a11y";
  */
 
 async function skipGuide(page: Page) {
-  await page.addInitScript(() => localStorage.setItem("conductor-guide-done", "1"));
+  await page.addInitScript(() => localStorage.setItem("quorum-guide-done", "1"));
 }
 
 const runBadge = (page: Page) => page.getByText(/^Run [0-9a-f]{8}/).locator("..");

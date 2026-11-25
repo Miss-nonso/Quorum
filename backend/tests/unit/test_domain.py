@@ -9,10 +9,10 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from conductor.domain.backoff import BackoffPolicy
-from conductor.domain.idempotency import derive_idempotency_key, validate_idempotency_key
-from conductor.domain.retry import DeadLetter, FailureKind, Requeue, decide_after_failure
-from conductor.domain.task_state import (
+from quorum.domain.backoff import BackoffPolicy
+from quorum.domain.idempotency import derive_idempotency_key, validate_idempotency_key
+from quorum.domain.retry import DeadLetter, FailureKind, Requeue, decide_after_failure
+from quorum.domain.task_state import (
     TERMINAL,
     TRANSITIONS,
     InvalidTransitionError,

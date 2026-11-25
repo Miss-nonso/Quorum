@@ -11,8 +11,8 @@ import httpx
 import pytest
 import uvicorn
 
-from conductor.api.app import create_app
-from conductor.core.config import Settings
+from quorum.api.app import create_app
+from quorum.core.config import Settings
 from tests.conftest import eventually
 
 

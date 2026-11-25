@@ -10,7 +10,7 @@ plan.
 | --- | --- |
 | Host | Intel Core i5-1135G7 (4 cores / 8 threads), 16 GB RAM, 512 GB SATA SSD, Linux 7.0 |
 | Database | PostgreSQL 16.16 in Docker, **default configuration** (`synchronous_commit=on`, fsync on), reached through Docker's port mapping |
-| Workers | Real `conductor worker` processes, 8 task slots each, `poll_interval_s=0.05` |
+| Workers | Real `quorum worker` processes, 8 task slots each, `poll_interval_s=0.05` |
 | Run date | 2026-11-25. The laptop was also running an IDE, a browser and a desktop session |
 
 ## Method
@@ -70,7 +70,7 @@ Markdown, and drops the database:
 workers: 239 → 320 tasks/s). Each task needs at least two durable commits (claim, completion),
 and each commit waits for an fsync on a laptop SSD behind Docker's storage driver. To check this
 rather than assume it, the same benchmark ran with `synchronous_commit=off` on the throwaway
-database (`--no-fsync-wait`, diagnostic only; Conductor never runs that way):
+database (`--no-fsync-wait`, diagnostic only; Quorum never runs that way):
 
 | Durable commits? | Claim p50 (1 claimer) | Tasks/s (1 worker) | Tasks/s (2 workers) |
 | --- | --- | --- | --- |

@@ -115,7 +115,7 @@ export function OverviewView() {
             {workers.data ? (
               workers.data.length === 0 ? (
                 <p className="text-sm text-muted">
-                  No workers are running. Start one with <code className="font-mono">conductor worker</code>.
+                  No workers are running. Start one with <code className="font-mono">quorum worker</code>.
                 </p>
               ) : (
                 <ul className="flex flex-col gap-2">

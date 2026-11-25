@@ -6,9 +6,9 @@ import httpx
 import pytest
 from fastapi import FastAPI, Query
 
-from conductor.api.app import create_app
-from conductor.api.errors import ApiError
-from conductor.core.config import Settings
+from quorum.api.app import create_app
+from quorum.api.errors import ApiError
+from quorum.core.config import Settings
 from tests.conftest import make_client
 
 

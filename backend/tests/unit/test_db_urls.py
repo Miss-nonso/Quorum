@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from conductor.core.config import Settings
-from conductor.core.db import asyncpg_dsn, engine_args
+from quorum.core.config import Settings
+from quorum.core.db import asyncpg_dsn, engine_args
 
 NEON = (
     "postgresql://app:s3cret@ep-cool-name-123456.eu-central-1.aws.neon.tech/neondb"
@@ -44,5 +44,5 @@ def test_sslmode_disable_turns_tls_off() -> None:
 
 
 def test_local_urls_pass_through_untouched() -> None:
-    local = "postgresql+asyncpg://conductor:conductor@localhost:5433/conductor"
+    local = "postgresql+asyncpg://quorum:quorum@localhost:5433/quorum"
     assert engine_args(local) == (local, {})

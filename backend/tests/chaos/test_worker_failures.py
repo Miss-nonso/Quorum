@@ -51,7 +51,7 @@ async def test_killed_worker_task_completes_elsewhere_with_effect_once(
     listen: bool,
     record_property: Callable[[str, object], None],
 ) -> None:
-    cluster.extra_env["CONDUCTOR_WORKER_LISTEN"] = str(listen).lower()
+    cluster.extra_env["QUORUM_WORKER_LISTEN"] = str(listen).lower()
     cluster.scheduler()
     victim = await cluster.worker(db, "worker-a")
     job = await enqueue(
@@ -175,9 +175,9 @@ async def test_demo_kill_command_crashes_the_worker_and_its_task_recovers(
     cluster: Cluster, engine: AsyncEngine, db: asyncpg.Connection
 ) -> None:
     """The public demo's "kill a worker" button, end to end, with real processes."""
-    from conductor.demo import service
+    from quorum.demo import service
 
-    cluster.extra_env["CONDUCTOR_DEMO_CHAOS"] = "true"
+    cluster.extra_env["QUORUM_DEMO_CHAOS"] = "true"
     cluster.scheduler()
     victim = await cluster.worker(db, "victim")
     job = await enqueue(engine, "notify", {"message": "demo", "hold_s": 2.0}, backoff=FAST_RETRY)

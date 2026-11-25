@@ -5,7 +5,7 @@
 
 ## Context
 
-Conductor needs durable task storage, competing consumers, delayed retries, priorities,
+Quorum needs durable task storage, competing consumers, delayed retries, priorities,
 dead-lettering, an audit trail and realtime updates. The usual architecture puts a broker
 (RabbitMQ, Redis Streams, SQS) next to a database: the broker moves work, and the database holds
 workflow state.

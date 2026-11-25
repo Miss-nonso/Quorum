@@ -21,7 +21,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ---- runtime: no build tooling, non-root ----------------------------------
 FROM python:3.12-slim-bookworm AS runtime
 
-RUN groupadd --system conductor && useradd --system --gid conductor --no-create-home conductor
+RUN groupadd --system quorum && useradd --system --gid quorum --no-create-home quorum
 
 WORKDIR /app
 COPY --from=build /app/.venv /app/.venv
@@ -30,14 +30,14 @@ COPY alembic ./alembic
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
-    CONDUCTOR_API_HOST=0.0.0.0
+    QUORUM_API_HOST=0.0.0.0
 
-USER conductor
+USER quorum
 EXPOSE 8000
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
-    CMD ["python", "-c", "import os, sys, urllib.request; port = os.environ.get('PORT') or os.environ.get('CONDUCTOR_API_PORT', '8000'); sys.exit(0 if urllib.request.urlopen(f'http://127.0.0.1:{port}/api/v1/health', timeout=2).status == 200 else 1)"]
+    CMD ["python", "-c", "import os, sys, urllib.request; port = os.environ.get('PORT') or os.environ.get('QUORUM_API_PORT', '8000'); sys.exit(0 if urllib.request.urlopen(f'http://127.0.0.1:{port}/api/v1/health', timeout=2).status == 200 else 1)"]
 
-# One image, many roles: `conductor api | worker | scheduler | migrate | seed | all`.
+# One image, many roles: `quorum api | worker | scheduler | migrate | seed | all`.
 # (`all` runs everything in one container, for free hosting tiers.)
-CMD ["conductor", "api"]
+CMD ["quorum", "api"]

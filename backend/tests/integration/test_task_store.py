@@ -11,11 +11,11 @@ import asyncpg
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from conductor.domain.backoff import BackoffPolicy
-from conductor.domain.retry import FailureKind
-from conductor.store import tasks as task_store
-from conductor.store import workers as worker_store
-from conductor.store.tasks import ClaimedTask, DeadLetterNotFoundError, StaleLeaseError
+from quorum.domain.backoff import BackoffPolicy
+from quorum.domain.retry import FailureKind
+from quorum.store import tasks as task_store
+from quorum.store import workers as worker_store
+from quorum.store.tasks import ClaimedTask, DeadLetterNotFoundError, StaleLeaseError
 from tests.integration.helpers import FAST_RETRY, enqueue, event_types, expire_lease, task_row
 
 WORKER_A = uuid.UUID(int=0xA)

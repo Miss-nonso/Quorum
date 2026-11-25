@@ -123,7 +123,7 @@ export function WorkersView() {
           title="No workers running"
           description={
             <>
-              Start one with <code className="font-mono">conductor worker</code> or{" "}
+              Start one with <code className="font-mono">quorum worker</code> or{" "}
               <code className="font-mono">docker compose up --scale worker=3</code>.
             </>
           }

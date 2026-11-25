@@ -1,6 +1,6 @@
 # Architecture
 
-Conductor is three kinds of process around one PostgreSQL database. The processes never talk to
+Quorum is three kinds of process around one PostgreSQL database. The processes never talk to
 each other directly; they coordinate entirely through rows, row locks, an advisory lock and
 (as a latency hint only) `LISTEN/NOTIFY`.
 
@@ -28,10 +28,10 @@ flowchart LR
 
 | Process | Count | What it does |
 | --- | --- | --- |
-| `conductor api` | 1+ | REST under `/api/v1`, the SSE stream, Prometheus metrics, demo controls. Stateless apart from its event hub. |
-| `conductor scheduler` | 2 | Campaigns for an advisory lock; the leader runs the reaper, cron firing, priority aging and the demo reset. |
-| `conductor worker` | N | Claims tasks with `SKIP LOCKED`, heartbeats to renew leases, executes built-in task types, reports outcomes with its fencing token. |
-| `conductor migrate` / `seed` | one-shot | Alembic migrations; the sample workflow. |
+| `quorum api` | 1+ | REST under `/api/v1`, the SSE stream, Prometheus metrics, demo controls. Stateless apart from its event hub. |
+| `quorum scheduler` | 2 | Campaigns for an advisory lock; the leader runs the reaper, cron firing, priority aging and the demo reset. |
+| `quorum worker` | N | Claims tasks with `SKIP LOCKED`, heartbeats to renew leases, executes built-in task types, reports outcomes with its fencing token. |
+| `quorum migrate` / `seed` | one-shot | Alembic migrations; the sample workflow. |
 
 All are the same image with a different command.
 
@@ -95,7 +95,7 @@ erDiagram
 | Table | Notes |
 | --- | --- |
 | `task_instances` | Status (CHECK), priority and effective priority, attempts, backoff policy, `not_before`, lease owner and expiry, `fencing_token`, unique `idempotency_key`, result, error, failure policy, demo chaos. A CHECK enforces *lease present ⇔ running*. |
-| `run_events` | Append-only. A statement-level trigger sends an empty `NOTIFY conductor_events`. The SSE hub reads rows by id, never from the notification. |
+| `run_events` | Append-only. A statement-level trigger sends an empty `NOTIFY quorum_events`. The SSE hub reads rows by id, never from the notification. |
 | `schedules` | Next fire time in UTC; a unique `(workflow_id, scheduled_for)` index on runs blocks double firing. |
 | `scheduler_state` | One row: who leads (display only; the advisory lock is the authority). |
 | `demo_sandboxes`, `worker_commands` | Public demo: visitor sandboxes; kill commands read by chaos-enabled workers on heartbeat. |
@@ -111,7 +111,7 @@ sequenceDiagram
     participant H as API EventHub
     participant B as Browser (EventSource)
     W->>PG: COMMIT (task_succeeded + task_ready rows)
-    PG-->>H: NOTIFY conductor_events (one per statement)
+    PG-->>H: NOTIFY quorum_events (one per statement)
     H->>PG: SELECT … FROM run_events WHERE id > last_seen
     H-->>B: id: 1234 / event: run_event / data: {…}
     Note over B,H: Connection drops

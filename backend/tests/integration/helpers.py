@@ -8,9 +8,9 @@ from uuid import UUID
 import asyncpg
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from conductor.domain.backoff import BackoffPolicy
-from conductor.store import tasks as task_store
-from conductor.tasks import builtin_registry
+from quorum.domain.backoff import BackoffPolicy
+from quorum.store import tasks as task_store
+from quorum.tasks import builtin_registry
 
 REGISTRY = builtin_registry()
 FAST_RETRY = BackoffPolicy(base_s=0.01, factor=1, max_s=0.01, jitter="none")

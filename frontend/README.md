@@ -1,4 +1,4 @@
-# Conductor dashboard
+# Quorum dashboard
 
 Next.js (App Router) + TypeScript + Tailwind, TanStack Query, React Flow and Recharts.
 
