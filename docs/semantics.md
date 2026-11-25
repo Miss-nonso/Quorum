@@ -101,8 +101,8 @@ t0 + ≤ lease_ttl_s   lease lapses (last renewal + TTL)
 ```
 
 With the defaults (30s TTL, 5s reaper interval, 2s poll) the worst case is about 37s plus
-backoff. The chaos suite uses a 1.5s TTL and observes detection in about 1.5s and full recovery
-(including re-running a 2s task) in about 3.5s.
+backoff. Measured (docs/benchmarks.md): 6.8 s median from SIGKILL to re-claim with a 6 s lease, and
+34.9 s with the 30 s default. The chaos suite uses a 1.5 s TTL and recovers in about 1.5 s.
 
 ## Attempts, replays and tokens
 

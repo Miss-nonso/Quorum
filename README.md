@@ -1,113 +1,161 @@
 # Conductor
 
-**A distributed job scheduling and workflow engine built on PostgreSQL alone, with failure recovery you can watch happen.**
+[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
+[![Release](https://github.com/OWNER/REPO/actions/workflows/release.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/release.yml)
+![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
+![PostgreSQL 16](https://img.shields.io/badge/postgres-16-336791)
 
-<!-- Badges and the live demo link are added in Phase 7 (Ship). -->
+**A distributed job scheduler and workflow engine built on nothing but PostgreSQL. Kill a worker
+mid-task and watch the work finish somewhere else, exactly once.**
 
-> **Status:** Phases 0 to 4 of 7 are complete: the engine, workflows, scheduling, the REST API,
-> live SSE stream and Prometheus metrics. The dashboard and the public demo are next. See the
-> [roadmap](#roadmap).
+**[Live demo →](https://conductor.example.com)** · no sign-up · [API docs](https://api.conductor.example.com/docs)
+
+![Killing a worker mid-run: the task is recovered by another worker and the run succeeds](docs/assets/demo.gif)
+
+## What you can do in the demo
+
+- **Run** a six-step pipeline (fetch → validate → transform → store ∥ report → notify) and watch
+  each step light up as workers claim it.
+- **Kill a worker** mid-task. Its lease expires, the reaper requeues the task, another worker
+  finishes it, and a fresh worker replaces the dead one. A plain-language feed narrates each step.
+- **Flood the queue**: urgent jobs jump ahead, and waiting raises the priority of the rest, so
+  nothing starves.
+- **Inject failures**: retries with exponential backoff, then the dead-letter queue, then
+  one-click replay, which resumes the run.
+
+## Features
+
+- **At-least-once delivery, effectively-once effects.** Idempotency keys behind unique
+  constraints ([semantics](docs/semantics.md)).
+- **Leases with fencing tokens.** A frozen "zombie" worker can never overwrite the real outcome.
+- **DAG workflows.** Validated on save (cycles, references, params); parallel branches; per-node
+  failure policies (`retry_then_dead`, `fail_run`, `continue`); data flows between steps by
+  reference.
+- **Cron with IANA time zones and explicit DST rules.** Skipped local times fire at the jump;
+  repeated local times fire once.
+- **Leader election** with an advisory lock. Every leader duty is also safe if two schedulers
+  briefly overlap.
+- **Priority aging**, chosen by benchmark (0.19 ms vs 36 ms per claim at 50k queued).
+- **Live dashboard.** One SSE stream with lossless reconnect; React Flow DAG; Gantt timeline;
+  workers; dead-letter queue; history. Accessible (axe in CI), dark and light themes, responsive.
+- **Operable.** Structured JSON logs with request, run, task and worker ids; Prometheus metrics;
+  OpenAPI docs; one-command local stack.
+- **No arbitrary code execution.** A small registry of built-in, validated task types
+  ([ADR 0007](docs/adr/0007-no-arbitrary-code-execution.md)).
+
+## Architecture
+
+```mermaid
+flowchart LR
+    browser([Browser]) --> vercel[Dashboard · Next.js]
+    browser -->|REST + SSE| api[API · FastAPI]
+    api <--> pg[(PostgreSQL 16)]
+    sched[Scheduler ×2<br/>leader + standby] <-->|advisory lock · reaper · cron · aging| pg
+    workers[Workers ×N] <-->|SKIP LOCKED claims · leases · fencing| pg
+```
+
+PostgreSQL is the only data store and the only message transport: tasks are rows, claims are
+`FOR UPDATE SKIP LOCKED`, wake-ups are `LISTEN/NOTIFY` (a hint only; polling is the safety net).
+Details: [docs/architecture.md](docs/architecture.md).
 
 ## Quick start
 
-Requirements: Docker with Compose v2, plus [uv](https://docs.astral.sh/uv/) and GNU make for the
-host-side tooling.
+Requires Docker with Compose v2.
 
 ```bash
-make dev        # PostgreSQL, migrations, API, scheduler (reaper) and a worker
-docker compose -f deploy/docker-compose.yml up --scale worker=5   # more workers
+docker compose -f deploy/docker-compose.yml up --build
 ```
 
-- API health: <http://localhost:8000/api/v1/health>
-- OpenAPI docs: <http://localhost:8000/docs>
+That starts PostgreSQL, runs migrations, seeds the sample workflow, and starts the API, the
+scheduler, three chaos-enabled workers and the dashboard.
 
-The Compose database publishes on host port **5433**, so it won't clash with a locally
-installed PostgreSQL.
+- Dashboard: <http://localhost:3000>
+- API docs: <http://localhost:8000/docs>
+- More workers: `docker compose -f deploy/docker-compose.yml up --scale worker=5`
+
+Without containers (uses the Compose database on port 5433): `make dev-host` for the backend and
+`make fe-dev` for the dashboard.
 
 ## Development
 
 ```bash
-make install    # backend deps + dev tools into backend/.venv
-make check      # lint + format check + mypy (strict) + full test suite
-make test       # starts the Compose DB if needed; unit + integration + chaos, coverage gate
-make test-chaos # only the tests that SIGKILL/SIGSTOP real worker processes
-make help       # every target
+make install fe-install   # backend (uv) and dashboard (npm) dependencies
+make check                # ruff, mypy --strict, unit + integration + chaos tests, coverage gate
+make fe-check             # eslint, prettier, tsc, vitest, production build
+make e2e                  # Playwright + axe against a real backend (real workers, really killed)
+make bench                # benchmarks (see docs/benchmarks.md)
+make help
 ```
 
-Integration tests run against a **real PostgreSQL**, never a mock. Each test session creates a
-throwaway database on the server named by `TEST_DATABASE_URL`, migrates it to head and drops it
-afterwards. If the server is unreachable the suite fails instead of skipping.
+Tests never mock the database: integration and chaos tests run against PostgreSQL 16, and chaos
+tests SIGKILL and SIGSTOP real worker, scheduler and API processes.
 
-## API
+## Hard problems, and how they're solved
 
-Interactive OpenAPI docs are served at `/docs`. Everything lives under `/api/v1`:
-
-| Endpoint | Purpose |
-| --- | --- |
-| `POST/GET /workflows`, `GET/PUT /workflows/{id}` | Define DAG workflows (validated on save); `PUT` creates a new version |
-| `POST /workflows/{id}/runs` | Trigger a run |
-| `GET /runs`, `GET /runs/{id}`, `POST /runs/{id}/cancel` | History (filter and paginate), run detail with tasks and events, cancel |
-| `POST /jobs` | Enqueue a standalone task (priority, retries, backoff, idempotency key) |
-| `GET /workers` | Workers with heartbeat age and current tasks |
-| `GET /dead-letters`, `POST /dead-letters/{id}/replay` | Inspect and replay the DLQ |
-| `GET /stats`, `GET /task-types` | Overview counters and throughput; built-in task schemas |
-| `GET /stream` | Live events over SSE, with lossless reconnect via `Last-Event-ID` |
-| `GET /health`, `GET /metrics` | Readiness (checks the DB); Prometheus metrics (also at `/metrics`) |
-
-Every error has the shape `{"error": {"code", "message", "request_id", "details"}}`, and every
-response carries `X-Request-ID`, which matches the `request_id` in the JSON logs.
-
-## Reliability, in one table
-
-| Problem | How it's solved | Proven by |
+| Problem | Solution | Proven by |
 | --- | --- | --- |
-| Two workers grabbing the same task | One-statement claim with `FOR UPDATE SKIP LOCKED` | 20 concurrent claimers over 400 tasks: each task is claimed once |
-| A worker dies mid-task | Leases renewed by heartbeat; the reaper requeues lapsed leases with backoff | Chaos test: SIGKILL a real worker process, and the task finishes on another |
-| A frozen "zombie" worker wakes up and writes a stale result | Monotonic fencing token checked on every write | Chaos test: SIGSTOP, takeover, SIGCONT, and the zombie's write is rejected |
-| Retries duplicating side effects | At-least-once delivery plus idempotency keys behind unique constraints | Kill after the effect but before completion, and exactly one notification exists |
-| Two parents finish at once and both miss the child | Every outcome transaction locks the run row first (run, then task) | 25-iteration race test, which fails on iteration 2 without the lock |
-| Every process killed mid-workflow | All state in Postgres; leases expire; the reaper recovers | Chaos test: SIGKILL everything twice (once after a side effect), restart, the run succeeds, effects happen once |
-| The scheduler leader dies | Advisory lock on a dedicated session; standbys retry. Duties are safe to run twice, and a unique index stops double-firing | Chaos test: SIGKILL the leader process, and the standby takes over (about 0.1s) and fires the next schedule |
-| Low-priority work starving | Periodic aging raises effective priority; claims stay on the index | Starvation test with a no-aging control; benchmark in ADR 0006 (0.19 ms vs 36 ms per claim) |
-| DST makes a job run twice or never | Cron evaluated in local time, with explicit gap and overlap rules | DST tests for New York, London and Lagos, plus property tests |
-| A task that crashes every worker it touches | Lease expiry consumes an attempt, so it eventually goes to the dead-letter queue | `test_reaper_dead_letters_a_task_that_keeps_killing_workers` |
-| Lost wake-up notifications | `NOTIFY` is only a hint; workers always poll | Chaos tests run with LISTEN on and off |
+| Two workers grabbing the same task | One-statement claim with `FOR UPDATE SKIP LOCKED` | 20 concurrent claimers over 400 tasks: each claimed exactly once |
+| A worker dies mid-task | Heartbeat-renewed leases; the reaper requeues lapsed leases with backoff | Chaos test: SIGKILL a real worker; the task finishes elsewhere |
+| A frozen "zombie" wakes up and writes a stale result | Monotonic fencing token checked on every write | Chaos test: SIGSTOP, takeover, SIGCONT; the zombie's write is rejected |
+| Retries duplicating side effects | At-least-once delivery plus idempotency keys behind unique constraints | Kill after the effect but before completion: one notification |
+| Two parents finish at once and both miss the child | Every outcome locks the run row first (run, then task): serialised, deadlock-free | 25-iteration race test, which fails on iteration 2 without the lock |
+| Every process killed mid-workflow | All state in Postgres; leases expire; the reaper recovers | SIGKILL everything twice (once after an effect), restart: the run succeeds, effects happen once |
+| The scheduler leader dies | Advisory lock on a dedicated session; leader duties are safe to overlap; unique index stops double-firing | Chaos test: SIGKILL the leader; the standby takes over (~0.1 s) and fires the next schedule |
+| Low-priority work starving | Periodic aging; claims stay on the index | Starvation test with a no-aging control; benchmark in ADR 0006 |
+| DST makes a job run twice or never | Cron evaluated in local time with explicit gap and overlap rules | New York, London and Lagos DST tests, plus property tests |
+| A task that crashes every worker it touches | Lease expiry consumes an attempt, so it eventually goes to the DLQ | `test_reaper_dead_letters_a_task_that_keeps_killing_workers` |
+| Lost wake-up notifications | `NOTIFY` is only a hint; workers and the SSE hub read by id and always poll | Chaos tests run with LISTEN on and off; SSE replay test |
+| Shutdown hanging on open SSE streams | Bounded graceful shutdown | Chaos test that fails without it (hangs > 15 s) |
 
-Exact guarantees and non-guarantees are in [`docs/semantics.md`](docs/semantics.md).
+## Benchmarks
+
+One laptop (i5-1135G7), PostgreSQL 16 in Docker with default, durable settings:
+
+| Measure | Result |
+| --- | --- |
+| Throughput, no-op tasks (full claim → execute → complete path) | 239–320 tasks/s, bound by durable commits, not workers (533/s with fsync waits off, diagnostic only) |
+| Claim round trip, p95 (1 / 16 concurrent claimers) | 10.6 ms / 31.4 ms, including the commit; ≈ 0.2 ms of it is the query |
+| Recovery after SIGKILL (6 s lease, demo) / (30 s lease, default) | 6.8 s / 34.9 s median: lease TTL plus one reaper tick |
+| Claim with periodic aging vs aging in the query (50k queued) | 0.19 ms vs 35.6 ms p50 |
+
+Method, hardware and how to reproduce: [docs/benchmarks.md](docs/benchmarks.md).
+
+## Limitations (honestly)
+
+- **Single primary.** PostgreSQL is the throughput ceiling and a single point of failure; database
+  HA is out of scope ([ADR 0001](docs/adr/0001-postgres-as-the-queue.md) covers when a broker
+  wins).
+- **Not exactly-once execution.** Handlers can run more than once; only effects keyed by an
+  idempotency key are deduplicated. External calls without a dedupe key are at-least-once.
+- **Built-in task types only.** That's deliberate for a public demo, and also a real limit on
+  generality.
+- **Demo rate limits are per API instance** (in memory); global caps live in the database.
+- **Recovery takes about one lease TTL.** Faster detection means more false positives for slow
+  workers; the TTL is a trade-off, configurable per deployment.
+- **Small-scale proof.** Benchmarks are from one laptop; there's no multi-node load test.
+
+## Documentation
+
+- [Architecture](docs/architecture.md) · [Delivery semantics](docs/semantics.md) ·
+  [Benchmarks](docs/benchmarks.md) · [Deployment runbook (and cost)](docs/deployment.md)
+- Architecture decision records:
+  [0000 Record decisions](docs/adr/0000-record-architecture-decisions.md) ·
+  [0001 PostgreSQL as the queue](docs/adr/0001-postgres-as-the-queue.md) ·
+  [0002 At-least-once + idempotency](docs/adr/0002-at-least-once-with-idempotency-keys.md) ·
+  [0003 Leases and fencing tokens](docs/adr/0003-leases-and-fencing-tokens.md) ·
+  [0004 Advisory-lock leader election](docs/adr/0004-advisory-lock-leader-election.md) ·
+  [0005 SSE over WebSockets](docs/adr/0005-sse-over-websockets.md) ·
+  [0006 Priority aging](docs/adr/0006-priority-aging.md) ·
+  [0007 No arbitrary code execution](docs/adr/0007-no-arbitrary-code-execution.md) ·
+  [0008 In-house cron and JSON Schema](docs/adr/0008-in-house-cron-and-json-schema.md)
 
 ## Repository layout
 
 | Path | Contents |
 | --- | --- |
-| `backend/src/conductor/` | API, scheduler and worker. One codebase, one image |
-| `backend/alembic/` | Hand-written migrations |
-| `backend/tests/` | `unit/` (no I/O) and `integration/` (real PostgreSQL) |
-| `frontend/` | Next.js dashboard (Phase 5) |
-| `deploy/` | Docker Compose files and the Caddy config |
-| `docs/` | Architecture, ADRs, delivery semantics, benchmarks |
-
-## Roadmap
-
-| Phase | Scope | Status |
-| --- | --- | --- |
-| 0 | Foundation: scaffold, tooling, Compose, CI, health endpoint, first migration | ✅ |
-| 1 | Core engine: SKIP LOCKED claiming, leases, fencing tokens, retries, DLQ, reaper | ✅ |
-| 2 | Workflows: DAG validation, dependency resolution, failure policies, restart recovery | ✅ |
-| 3 | Scheduling: cron + IANA time zones, leader election, priority aging | ✅ |
-| 4 | API + realtime: full REST surface, SSE, Prometheus metrics | ✅ |
-| 5 | Dashboard: DAG view, timeline, workers, DLQ, history | ⏳ |
-| 6 | Public demo: sandbox, chaos controls, narrated event feed | |
-| 7 | Ship: production deploy, benchmarks, docs | |
-
-## Design decisions
-
-Architecture decisions are recorded in [`docs/adr/`](docs/adr/):
-
-- [0001 PostgreSQL as the queue](docs/adr/0001-postgres-as-the-queue.md), including when a broker would be the right call
-- [0002 At-least-once delivery with idempotency keys](docs/adr/0002-at-least-once-with-idempotency-keys.md)
-- [0003 Leases and fencing tokens](docs/adr/0003-leases-and-fencing-tokens.md)
-- [0004 Leader election with an advisory lock](docs/adr/0004-advisory-lock-leader-election.md)
-- [0005 Server-Sent Events, not WebSockets](docs/adr/0005-sse-over-websockets.md)
-- [0006 Priority aging by periodic update](docs/adr/0006-priority-aging.md), chosen by benchmark
-- [0007 No arbitrary code execution](docs/adr/0007-no-arbitrary-code-execution.md)
-- [0008 In-house cron parser and JSON Schema subset](docs/adr/0008-in-house-cron-and-json-schema.md)
+| `backend/src/conductor/` | `domain/` (pure), `store/` (SQL), `worker/`, `scheduler/`, `api/`, `tasks/`, `demo/` |
+| `backend/tests/` | `unit/`, `integration/` (real Postgres), `chaos/` (real processes, SIGKILL/SIGSTOP) |
+| `backend/bench/` | Benchmarks |
+| `frontend/` | Next.js dashboard, Vitest and Playwright + axe |
+| `deploy/` | Compose (dev and prod), Caddyfile, backup script |
+| `docs/` | Architecture, semantics, benchmarks, deployment, ADRs |
