@@ -62,7 +62,11 @@ test-chaos: db ## Run only the chaos tests (real worker processes, SIGKILL/SIGST
 .PHONY: check
 check: lint typecheck test ## Everything CI runs on the backend
 
-.PHONY: bench demo
-bench demo:
+.PHONY: bench
+bench: db ## Run the benchmarks (see docs/benchmarks.md)
+	$(UV) python bench/claim_ordering.py
+
+.PHONY: demo
+demo:
 	@echo "'make $@' is not available yet: it arrives with the phase that builds it (see README roadmap)." >&2
 	@exit 1

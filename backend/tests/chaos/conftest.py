@@ -89,7 +89,8 @@ class Cluster:
         return proc
 
     def scheduler(self) -> Proc:
-        return self._spawn("scheduler", "scheduler")
+        count = sum(1 for p in self.procs if p.name.startswith("scheduler"))
+        return self._spawn(f"scheduler-{count}", "scheduler")
 
     def stop_all(self) -> None:
         for proc in self.procs:

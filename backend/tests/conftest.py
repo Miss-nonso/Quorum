@@ -43,6 +43,9 @@ ENGINE_TABLES = (
     "workflow_runs",
     "workflows",
     "workers",
+    "schedules",
+    "scheduler_state",
+    "stored_records",
 )
 
 
