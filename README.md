@@ -4,9 +4,9 @@
 
 <!-- Badges and the live demo link are added in Phase 7 (Ship). -->
 
-> **Status:** Phases 0 to 3 of 7 are complete: the queue engine, DAG workflows and scheduling
-> (cron with DST rules, leader election, priority aging) work and are proven under chaos tests.
-> The API surface, the dashboard and the public demo are next. See the [roadmap](#roadmap).
+> **Status:** Phases 0 to 4 of 7 are complete: the engine, workflows, scheduling, the REST API,
+> live SSE stream and Prometheus metrics. The dashboard and the public demo are next. See the
+> [roadmap](#roadmap).
 
 ## Quick start
 
@@ -37,6 +37,25 @@ make help       # every target
 Integration tests run against a **real PostgreSQL**, never a mock. Each test session creates a
 throwaway database on the server named by `TEST_DATABASE_URL`, migrates it to head and drops it
 afterwards. If the server is unreachable the suite fails instead of skipping.
+
+## API
+
+Interactive OpenAPI docs are served at `/docs`. Everything lives under `/api/v1`:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST/GET /workflows`, `GET/PUT /workflows/{id}` | Define DAG workflows (validated on save); `PUT` creates a new version |
+| `POST /workflows/{id}/runs` | Trigger a run |
+| `GET /runs`, `GET /runs/{id}`, `POST /runs/{id}/cancel` | History (filter and paginate), run detail with tasks and events, cancel |
+| `POST /jobs` | Enqueue a standalone task (priority, retries, backoff, idempotency key) |
+| `GET /workers` | Workers with heartbeat age and current tasks |
+| `GET /dead-letters`, `POST /dead-letters/{id}/replay` | Inspect and replay the DLQ |
+| `GET /stats`, `GET /task-types` | Overview counters and throughput; built-in task schemas |
+| `GET /stream` | Live events over SSE, with lossless reconnect via `Last-Event-ID` |
+| `GET /health`, `GET /metrics` | Readiness (checks the DB); Prometheus metrics (also at `/metrics`) |
+
+Every error has the shape `{"error": {"code", "message", "request_id", "details"}}`, and every
+response carries `X-Request-ID`, which matches the `request_id` in the JSON logs.
 
 ## Reliability, in one table
 
@@ -75,8 +94,8 @@ Exact guarantees and non-guarantees are in [`docs/semantics.md`](docs/semantics.
 | 1 | Core engine: SKIP LOCKED claiming, leases, fencing tokens, retries, DLQ, reaper | ✅ |
 | 2 | Workflows: DAG validation, dependency resolution, failure policies, restart recovery | ✅ |
 | 3 | Scheduling: cron + IANA time zones, leader election, priority aging | ✅ |
-| 4 | API + realtime: full REST surface, SSE, Prometheus metrics | ⏳ |
-| 5 | Dashboard: DAG view, timeline, workers, DLQ, history | |
+| 4 | API + realtime: full REST surface, SSE, Prometheus metrics | ✅ |
+| 5 | Dashboard: DAG view, timeline, workers, DLQ, history | ⏳ |
 | 6 | Public demo: sandbox, chaos controls, narrated event feed | |
 | 7 | Ship: production deploy, benchmarks, docs | |
 
@@ -88,6 +107,7 @@ Architecture decisions are recorded in [`docs/adr/`](docs/adr/):
 - [0002 At-least-once delivery with idempotency keys](docs/adr/0002-at-least-once-with-idempotency-keys.md)
 - [0003 Leases and fencing tokens](docs/adr/0003-leases-and-fencing-tokens.md)
 - [0004 Leader election with an advisory lock](docs/adr/0004-advisory-lock-leader-election.md)
+- [0005 Server-Sent Events, not WebSockets](docs/adr/0005-sse-over-websockets.md)
 - [0006 Priority aging by periodic update](docs/adr/0006-priority-aging.md), chosen by benchmark
 - [0007 No arbitrary code execution](docs/adr/0007-no-arbitrary-code-execution.md)
 - [0008 In-house cron parser and JSON Schema subset](docs/adr/0008-in-house-cron-and-json-schema.md)
