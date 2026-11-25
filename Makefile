@@ -19,6 +19,10 @@ install: ## Install backend dependencies (incl. dev tools) into backend/.venv
 dev: ## Build and run the full local stack (DB, migrations, API, scheduler, worker)
 	$(COMPOSE) up --build
 
+.PHONY: dev-host
+dev-host: db ## Backend on the host (no containers), demo mode, 3 respawning chaos workers
+	./scripts/dev-host.sh
+
 .PHONY: down
 down: ## Stop the local stack (keeps the database volume)
 	$(COMPOSE) down

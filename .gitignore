@@ -29,3 +29,4 @@ out/
 .DS_Store
 playwright-report/
 test-results/
+.dev-logs/
