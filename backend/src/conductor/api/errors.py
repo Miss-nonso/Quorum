@@ -50,6 +50,7 @@ class ApiError(Exception):
         self.code = code
         self.message = message
         self.details = details
+        self.headers: dict[str, str] = {}
 
 
 def _code_for_status(status: int) -> str:
@@ -74,7 +75,9 @@ def error_response(
 
 async def _api_error(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, ApiError)  # noqa: S101 - narrowing for mypy
-    return error_response(request, exc.status, exc.code, exc.message, exc.details)
+    response = error_response(request, exc.status, exc.code, exc.message, exc.details)
+    response.headers.update(exc.headers)
+    return response
 
 
 async def _http_error(request: Request, exc: Exception) -> JSONResponse:

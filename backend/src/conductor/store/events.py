@@ -37,6 +37,7 @@ class EventType(StrEnum):
     LEASE_EXPIRED = "lease_expired"
     LEASE_LOST = "lease_lost"
     STALE_WRITE_REJECTED = "stale_write_rejected"
+    CHAOS_WORKER_KILLED = "chaos_worker_killed"
 
 
 _INSERT_EVENT = text(

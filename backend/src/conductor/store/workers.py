@@ -17,13 +17,15 @@ async def register_worker(
     pid: int,
     concurrency: int,
     capabilities: list[str],
+    accepts_chaos: bool = False,
 ) -> None:
     """Announce a worker process. Each process start uses a fresh id."""
     await conn.execute(
         text(
             """
-            INSERT INTO workers (id, hostname, pid, concurrency, capabilities, status)
-            VALUES (:id, :hostname, :pid, :concurrency, :capabilities, 'active')
+            INSERT INTO workers
+                (id, hostname, pid, concurrency, capabilities, status, accepts_chaos)
+            VALUES (:id, :hostname, :pid, :concurrency, :capabilities, 'active', :chaos)
             """
         ),
         {
@@ -32,8 +34,24 @@ async def register_worker(
             "pid": pid,
             "concurrency": concurrency,
             "capabilities": capabilities,
+            "chaos": accepts_chaos,
         },
     )
+
+
+async def take_commands(conn: AsyncConnection, *, worker_id: UUID) -> list[str]:
+    """Consume this worker's pending commands (demo chaos only)."""
+    rows = await conn.execute(
+        text(
+            """
+            UPDATE worker_commands SET consumed_at = now()
+            WHERE worker_id = :id AND consumed_at IS NULL
+            RETURNING command
+            """
+        ),
+        {"id": worker_id},
+    )
+    return [r.command for r in rows]
 
 
 async def heartbeat(conn: AsyncConnection, *, worker_id: UUID, current_load: int) -> None:

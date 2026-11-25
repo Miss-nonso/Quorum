@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from conductor.core.config import Settings
 from conductor.core.db import asyncpg_dsn
+from conductor.demo import service as demo_service
 from conductor.scheduler.leader import LeaderElector
 from conductor.scheduler.reaper import Reaper, ReaperConfig
 from conductor.store import aging as aging_store
@@ -38,6 +39,8 @@ class SchedulerConfig:
     aging_max_bonus: int = 200
     leader_check_interval_s: float = 2.0
     leader_retry_interval_s: float = 2.0
+    demo_reset_interval_s: float | None = None  # set only on the public demo
+    demo_retention_s: float = 1800.0
 
     @classmethod
     def from_settings(cls, settings: Settings) -> SchedulerConfig:
@@ -49,6 +52,8 @@ class SchedulerConfig:
             aging_max_bonus=settings.aging_max_bonus,
             leader_check_interval_s=settings.leader_check_interval_s,
             leader_retry_interval_s=settings.leader_retry_interval_s,
+            demo_reset_interval_s=settings.demo_reset_interval_s if settings.demo_mode else None,
+            demo_retention_s=settings.demo_retention_s,
         )
 
 
@@ -105,9 +110,20 @@ class Scheduler:
                 max_bonus=self._config.aging_max_bonus,
             )
 
+    async def reset_demo(self) -> dict[str, int]:
+        async with self._engine.begin() as conn:
+            deleted = await demo_service.reset_demo_data(
+                conn, retention_s=self._config.demo_retention_s
+            )
+        if any(deleted.values()):
+            logger.info("demo data reset", extra={"deleted": deleted})
+        return deleted
+
     async def _duties(self) -> None:
         c = self._config
         async with asyncio.TaskGroup() as group:
             group.create_task(_every(c.reaper.interval_s, "reaper", self.reaper.run_once))
             group.create_task(_every(c.cron_tick_s, "cron", self.fire_schedules))
             group.create_task(_every(c.aging_tick_s, "aging", self.age_priorities))
+            if c.demo_reset_interval_s is not None:
+                group.create_task(_every(c.demo_reset_interval_s, "demo reset", self.reset_demo))

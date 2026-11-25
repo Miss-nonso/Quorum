@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import math
 import signal
 from collections.abc import Callable, Coroutine
 from pathlib import Path
@@ -35,7 +36,7 @@ def _run_api(settings: Settings, _: argparse.Namespace) -> None:
         # SSE streams never end on their own, so without a bound uvicorn's
         # graceful shutdown would wait on them forever. Clients reconnect
         # (with Last-Event-ID) to another instance and lose nothing.
-        timeout_graceful_shutdown=settings.shutdown_grace_s,
+        timeout_graceful_shutdown=math.ceil(settings.shutdown_grace_s),
     )
 
 

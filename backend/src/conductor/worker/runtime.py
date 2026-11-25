@@ -23,6 +23,7 @@ import os
 import random
 import socket
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID, uuid4
@@ -65,6 +66,8 @@ class WorkerConfig:
     shutdown_grace_s: float = 20.0
     listen: bool = True
     env: TaskEnvironment = field(default_factory=TaskEnvironment)
+    # Public demo pool only: obey kill commands and injected task faults.
+    demo_chaos: bool = False
 
     @classmethod
     def from_settings(cls, settings: Settings) -> WorkerConfig:
@@ -76,6 +79,7 @@ class WorkerConfig:
                 http_timeout_s=settings.http_timeout_s,
                 http_max_bytes=settings.http_max_bytes,
             ),
+            demo_chaos=settings.demo_chaos,
             concurrency=settings.worker_concurrency,
             lease_ttl_s=settings.lease_ttl_s,
             heartbeat_interval_s=settings.heartbeat_interval_s,
@@ -115,6 +119,8 @@ class Worker:
         self._wake = asyncio.Event()
         self._stopping = asyncio.Event()
         self._rng = random.Random()
+        # How a demo kill command ends the process; tests substitute this.
+        self.hard_exit: Callable[[int], object] = os._exit
 
     # ------------------------------------------------------------------ lifecycle
 
@@ -136,6 +142,7 @@ class Worker:
                     pid=os.getpid(),
                     concurrency=self._config.concurrency,
                     capabilities=self._registry.names(),
+                    accepts_chaos=self._config.demo_chaos,
                 )
             logger.info(
                 "worker started",
@@ -224,6 +231,8 @@ class Worker:
                 engine=self._engine,
                 env=self._config.env,
             )
+            if self._config.demo_chaos and claim.chaos:
+                await _inject_chaos(claim)
             async with asyncio.timeout(claim.timeout_s):
                 result = await task_type.handler(ctx, params)
         except asyncio.CancelledError:
@@ -319,7 +328,19 @@ class Worker:
                     await worker_store.heartbeat(
                         conn, worker_id=self.id, current_load=len(self._inflight)
                     )
+                    commands = (
+                        await worker_store.take_commands(conn, worker_id=self.id)
+                        if self._config.demo_chaos
+                        else []
+                    )
                 last_renewed = time.monotonic()
+                if "kill" in commands:
+                    # A real crash, on purpose: no lease release, no cleanup, no
+                    # goodbye. Exactly what the reaper exists to recover from.
+                    logger.critical("demo: killed by chaos command; exiting immediately")
+                    logging.shutdown()
+                    self.hard_exit(137)
+                    return
             except Exception:
                 logger.exception("heartbeat failed")
                 if time.monotonic() - last_renewed > self._config.lease_ttl_s:
@@ -403,6 +424,22 @@ class Worker:
                     "released task on shutdown",
                     extra={"task_id": str(claim.id), "released": released},
                 )
+
+
+class InjectedFailureError(RuntimeError):
+    """A failure injected by the public demo (retryable, like any crash)."""
+
+
+async def _inject_chaos(claim: ClaimedTask) -> None:
+    """Apply demo fault injection: pace the step, then maybe fail on purpose."""
+    chaos = claim.chaos or {}
+    delay = float(chaos.get("delay_s", 0) or 0)
+    if delay > 0:
+        await asyncio.sleep(min(delay, 30.0))
+    if claim.attempt <= int(chaos.get("fail_attempts", 0) or 0):
+        raise InjectedFailureError(
+            f"injected by the demo: attempt {claim.attempt} fails on purpose"
+        )
 
 
 def _describe(exc: BaseException) -> dict[str, Any]:

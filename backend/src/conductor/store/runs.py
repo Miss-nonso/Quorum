@@ -80,6 +80,8 @@ async def create_workflow_run(
     *,
     trigger: str = "manual",
     scheduled_for: datetime | None = None,
+    sandbox_id: str | None = None,
+    chaos: dict[str, dict[str, Any]] | None = None,
 ) -> CreatedRun:
     """Materialise a run: one task per node, roots ready, the rest pending.
 
@@ -105,8 +107,8 @@ async def create_workflow_run(
         text(
             """
             INSERT INTO workflow_runs
-                (id, workflow_id, version, status, trigger, scheduled_for, started_at)
-            VALUES (:id, :wf, :version, 'running', :trigger, :scheduled_for, now())
+                (id, workflow_id, version, status, trigger, scheduled_for, started_at, sandbox_id)
+            VALUES (:id, :wf, :version, 'running', :trigger, :scheduled_for, now(), :sandbox)
             """
         ),
         {
@@ -115,6 +117,7 @@ async def create_workflow_run(
             "version": row.version,
             "trigger": trigger,
             "scheduled_for": scheduled_for,
+            "sandbox": sandbox_id,
         },
     )
     task_ids = {key: uuid4() for key in order}
@@ -122,13 +125,17 @@ async def create_workflow_run(
         """
         INSERT INTO task_instances (
             id, run_id, node_key, task_type, params, status, priority, effective_priority,
-            max_attempts, backoff_policy, timeout_s, failure_policy, idempotency_key
+            max_attempts, backoff_policy, timeout_s, failure_policy, idempotency_key, chaos
         ) VALUES (
             :id, :run_id, :key, :task_type, :params, :status, :priority, :priority,
-            :max_attempts, :backoff, :timeout_s, :failure_policy, :idempotency_key
+            :max_attempts, :backoff, :timeout_s, :failure_policy, :idempotency_key, :chaos
         )
         """
-    ).bindparams(bindparam("params", type_=JSONB), bindparam("backoff", type_=JSONB))
+    ).bindparams(
+        bindparam("params", type_=JSONB),
+        bindparam("backoff", type_=JSONB),
+        bindparam("chaos", type_=JSONB, required=False),
+    )
     for key in order:
         node = definition.node(key)
         await conn.execute(
@@ -146,6 +153,7 @@ async def create_workflow_run(
                 "timeout_s": node.timeout_s,
                 "failure_policy": node.failure_policy.value,
                 "idempotency_key": derive_idempotency_key(run_id, key),
+                "chaos": (chaos or {}).get(key),
             },
         )
     edges = [

@@ -169,3 +169,37 @@ async def test_frozen_zombie_worker_cannot_overwrite_the_new_owners_outcome(
         job.task_id,
     )
     assert [r["w"] for r in succeeded_by] == [str(successor.worker_id)]
+
+
+async def test_demo_kill_command_crashes_the_worker_and_its_task_recovers(
+    cluster: Cluster, engine: AsyncEngine, db: asyncpg.Connection
+) -> None:
+    """The public demo's "kill a worker" button, end to end, with real processes."""
+    from conductor.demo import service
+
+    cluster.extra_env["CONDUCTOR_DEMO_CHAOS"] = "true"
+    cluster.scheduler()
+    victim = await cluster.worker(db, "victim")
+    job = await enqueue(engine, "notify", {"message": "demo", "hold_s": 2.0}, backoff=FAST_RETRY)
+    await eventually(lambda: _delivered(db, job.idempotency_key), what="first delivery")
+    survivor = await cluster.worker(db, "survivor")
+
+    async with engine.begin() as conn:
+        killed = await service.kill_worker(conn, "chaos-test-sandbox-0001")
+    assert killed.worker_id == victim.worker_id
+    assert killed.tasks == ["job"]
+
+    async def exited() -> int | None:
+        return victim.popen.poll()
+
+    assert await eventually(exited, within=10, what="victim to crash") == 137
+    await eventually(lambda: _succeeded(db, job.task_id), within=20, what="recovery")
+    finisher = await db.fetchval(
+        "SELECT payload->>'worker_id' FROM run_events "
+        "WHERE task_id = $1 AND type = 'task_succeeded'",
+        job.task_id,
+    )
+    assert finisher == str(survivor.worker_id)
+    assert await db.fetchval("SELECT count(*) FROM notifications") == 1
+    types = await event_types(db, job.task_id)
+    assert types.index("chaos_worker_killed") < types.index("lease_expired")

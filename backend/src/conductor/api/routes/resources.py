@@ -5,9 +5,10 @@ from __future__ import annotations
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Header, Query, Request, status
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncConnection
 
 from conductor.api.deps import Limit, Offset, ReadConn, Registry, WriteConn
 from conductor.api.errors import ApiError, ErrorResponse
@@ -28,6 +29,7 @@ from conductor.api.schemas import (
     WorkflowOut,
     WorkflowUpdate,
 )
+from conductor.demo import service as demo_service
 from conductor.domain.cron import CronError
 from conductor.domain.dag import DagError
 from conductor.store import queries
@@ -45,6 +47,30 @@ CONFLICT: Responses = {
     409: {"model": ErrorResponse, "description": "Conflicts with current state."}
 }
 INVALID: Responses = {422: {"model": ErrorResponse, "description": "Invalid input."}}
+
+
+def general_writes_allowed(request: Request) -> None:
+    """On the public demo, only the scoped /demo endpoints may change anything."""
+    if request.app.state.settings.demo_mode:
+        raise ApiError(
+            403,
+            "disabled_in_demo",
+            "This action is disabled on the public demo. Use the demo controls instead.",
+        )
+
+
+async def require_sandbox_owner(
+    request: Request, conn: AsyncConnection, run_id: UUID, sandbox_id: str | None
+) -> None:
+    """On the public demo, visitors may only cancel or replay their own runs."""
+    if not request.app.state.settings.demo_mode:
+        return
+    if not sandbox_id or not await demo_service.owns_run(conn, sandbox_id, run_id):
+        raise ApiError(403, "not_your_run", "On the demo you can only change your own runs.")
+
+
+GeneralWrite = [Depends(general_writes_allowed)]
+SandboxHeader = Annotated[str | None, Header(alias="X-Sandbox-Id")]
 
 
 def _not_found(kind: str, ident: object) -> ApiError:
@@ -88,6 +114,7 @@ def _validate_or_422(registry: Registry, body: WorkflowIn | WorkflowUpdate) -> N
     response_model=WorkflowOut,
     tags=["workflows"],
     summary="Create a workflow",
+    dependencies=GeneralWrite,
     responses={**CONFLICT, **INVALID},
 )
 async def create_workflow(body: WorkflowIn, conn: WriteConn, registry: Registry) -> WorkflowOut:
@@ -139,6 +166,7 @@ async def get_workflow(workflow_id: UUID, conn: ReadConn) -> WorkflowOut:
     response_model=WorkflowOut,
     tags=["workflows"],
     summary="Update a workflow (creates a new version)",
+    dependencies=GeneralWrite,
     responses={**NOT_FOUND, **INVALID},
 )
 async def update_workflow(
@@ -168,6 +196,7 @@ async def update_workflow(
     response_model=RunOut,
     tags=["runs"],
     summary="Trigger a run",
+    dependencies=GeneralWrite,
     responses=NOT_FOUND,
 )
 async def trigger_run(workflow_id: UUID, conn: WriteConn) -> RunOut:
@@ -234,8 +263,11 @@ async def get_run(run_id: UUID, conn: ReadConn) -> RunDetail:
     summary="Cancel a run",
     responses={**NOT_FOUND, **CONFLICT},
 )
-async def cancel_run(run_id: UUID, conn: WriteConn) -> RunOut:
+async def cancel_run(
+    run_id: UUID, conn: WriteConn, request: Request, sandbox_id: SandboxHeader = None
+) -> RunOut:
     """Cancels unfinished tasks; a running task's worker is fenced off and stops."""
+    await require_sandbox_owner(request, conn, run_id, sandbox_id)
     try:
         await run_store.cancel_run(conn, run_id)
     except run_store.RunNotFoundError as exc:
@@ -254,6 +286,7 @@ async def cancel_run(run_id: UUID, conn: WriteConn) -> RunOut:
     response_model=JobOut,
     tags=["jobs"],
     summary="Enqueue a standalone job",
+    dependencies=GeneralWrite,
     responses={**INVALID, **CONFLICT},
 )
 async def enqueue_job(body: JobIn, conn: WriteConn, registry: Registry) -> JobOut:
@@ -320,8 +353,21 @@ async def list_dead_letters(
     summary="Replay a dead-lettered task",
     responses={**NOT_FOUND, **CONFLICT},
 )
-async def replay(dead_letter_id: UUID, conn: WriteConn) -> ReplayOut:
+async def replay(
+    dead_letter_id: UUID, conn: WriteConn, request: Request, sandbox_id: SandboxHeader = None
+) -> ReplayOut:
     """Requeue with a fresh attempt budget. The idempotency key is kept, so effects don't repeat."""
+    owner_run = (
+        await conn.execute(
+            text(
+                "SELECT t.run_id FROM dead_letters d JOIN task_instances t ON t.id = d.task_id "
+                "WHERE d.id = :id"
+            ),
+            {"id": dead_letter_id},
+        )
+    ).scalar_one_or_none()
+    if owner_run is not None:
+        await require_sandbox_owner(request, conn, owner_run, sandbox_id)
     try:
         task_id = await task_store.replay_dead_letter(conn, dead_letter_id)
     except task_store.DeadLetterNotFoundError as exc:

@@ -86,6 +86,26 @@ class Settings(BaseModel):
     leader_check_interval_s: float = Field(default=2.0, gt=0)
     leader_retry_interval_s: float = Field(default=2.0, gt=0)
 
+    # --- public demo
+    demo_mode: bool = Field(
+        default=False,
+        description="Expose /demo endpoints and disable general write endpoints (public demo).",
+    )
+    demo_chaos: bool = Field(
+        default=False,
+        description="Worker obeys demo kill commands and injected task faults. Demo pool only.",
+    )
+    demo_step_delay_s: float = Field(default=1.2, ge=0, le=10)
+    demo_max_active_runs: int = Field(default=30, ge=1, le=1000)
+    demo_max_runs_per_sandbox: int = Field(default=3, ge=1, le=50)
+    demo_flood_low: int = Field(default=40, ge=1, le=500)
+    demo_flood_high: int = Field(default=6, ge=1, le=100)
+    demo_max_queued: int = Field(default=400, ge=10, le=10_000)
+    demo_actions_per_ip_per_min: int = Field(default=20, ge=1, le=1000)
+    demo_kills_per_min: int = Field(default=6, ge=1, le=600)
+    demo_retention_s: float = Field(default=1800, gt=0)
+    demo_reset_interval_s: float = Field(default=300, gt=0)
+
     @model_validator(mode="after")
     def _check_timing(self) -> Settings:
         # At least two heartbeats per lease: one lost heartbeat must not cost a lease.

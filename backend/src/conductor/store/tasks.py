@@ -62,6 +62,10 @@ class TaskSpec:
     timeout_s: float = 60.0
     idempotency_key: str | None = None
     delay_s: float = 0.0
+    # Public demo only: the visitor's sandbox, and fault injection honoured by
+    # chaos-enabled workers ({"delay_s": float, "fail_attempts": int}).
+    sandbox_id: str | None = None
+    chaos: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +90,7 @@ class ClaimedTask:
     idempotency_key: str
     timeout_s: float
     lease_expires_at: datetime
+    chaos: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,10 +117,10 @@ async def enqueue_job(conn: AsyncConnection, spec: TaskSpec) -> EnqueuedTask:
     )
     await conn.execute(
         text(
-            "INSERT INTO workflow_runs (id, status, trigger, started_at) "
-            "VALUES (:id, 'running', 'api', now())"
+            "INSERT INTO workflow_runs (id, status, trigger, started_at, sandbox_id) "
+            "VALUES (:id, 'running', :trigger, now(), :sandbox)"
         ),
-        {"id": run_id},
+        {"id": run_id, "trigger": "demo" if spec.sandbox_id else "api", "sandbox": spec.sandbox_id},
     )
     await conn.execute(
         text(
@@ -123,14 +128,18 @@ async def enqueue_job(conn: AsyncConnection, spec: TaskSpec) -> EnqueuedTask:
             INSERT INTO task_instances (
                 id, run_id, node_key, task_type, params, status, priority,
                 effective_priority, max_attempts, backoff_policy, timeout_s,
-                not_before, idempotency_key
+                not_before, idempotency_key, chaos
             ) VALUES (
                 :id, :run_id, :node_key, :task_type, :params, 'ready', :priority,
                 :priority, :max_attempts, :backoff, :timeout_s,
-                now() + make_interval(secs => :delay_s), :key
+                now() + make_interval(secs => :delay_s), :key, :chaos
             )
             """
-        ).bindparams(bindparam("params", type_=JSONB), bindparam("backoff", type_=JSONB)),
+        ).bindparams(
+            bindparam("params", type_=JSONB),
+            bindparam("backoff", type_=JSONB),
+            bindparam("chaos", type_=JSONB, required=False),
+        ),
         {
             "id": task_id,
             "run_id": run_id,
@@ -143,6 +152,7 @@ async def enqueue_job(conn: AsyncConnection, spec: TaskSpec) -> EnqueuedTask:
             "timeout_s": spec.timeout_s,
             "delay_s": spec.delay_s,
             "key": key,
+            "chaos": dict(spec.chaos) if spec.chaos else None,
         },
     )
     await record_event(
@@ -180,7 +190,8 @@ _CLAIM = text(
         WHERE t.id = c.id
         RETURNING t.id, t.run_id, t.node_key, t.task_type, t.params, t.attempt,
                   t.max_attempts, t.fencing_token, t.idempotency_key, t.timeout_s,
-                  t.lease_owner, t.lease_expires_at, t.effective_priority, t.created_at
+                  t.lease_owner, t.lease_expires_at, t.effective_priority, t.created_at,
+                  t.chaos
     ),
     -- Data-modifying CTEs always run, even though the final SELECT ignores this one.
     events AS (
@@ -224,6 +235,7 @@ async def claim_tasks(
             idempotency_key=r["idempotency_key"],
             timeout_s=r["timeout_s"],
             lease_expires_at=r["lease_expires_at"],
+            chaos=r["chaos"],
         )
         for r in rows
     ]
@@ -679,7 +691,9 @@ async def replay_dead_letter(conn: AsyncConnection, dead_letter_id: UUID) -> UUI
         text(
             """
             UPDATE task_instances
-            SET status = 'ready', attempt = 0, not_before = now(), updated_at = now()
+            SET status = 'ready', attempt = 0, not_before = now(), updated_at = now(),
+                -- Replaying means "the cause is fixed": drop any injected fault.
+                chaos = NULL
             WHERE id = :id AND status = 'dead'
             """
         ),
