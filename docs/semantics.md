@@ -1,8 +1,7 @@
 # Delivery semantics and failure model
 
 This page states precisely what Conductor guarantees and what it does not. Each guarantee names
-the test that fails if it stops being true. *Status: Phase 1. Workflow-level semantics (DAG
-advancement, failure policies, restart recovery) are added in Phase 2.*
+the test that fails if it stops being true. *Status: covers Phases 1 and 2 (queue and workflows).*
 
 ## Failure model
 
@@ -36,6 +35,31 @@ Conductor assumes:
 | G7 | A lease renewed before the reaper locks the row is never reaped, and concurrent reapers recover each expired task exactly once. | `test_lease_renewed_at_the_last_moment_is_not_reaped`, `test_concurrent_reapers_recover_each_task_exactly_once` |
 | G8 | Correctness does not depend on `LISTEN/NOTIFY`. | The kill test, parametrised `listen` / `poll-only` |
 
+## Workflow runs
+
+| # | Guarantee | Proven by |
+| --- | --- | --- |
+| W1 | A workflow can't be saved if it has a cycle, a dangling or duplicate dependency, an unknown task type, invalid params, or a reference to a node that is not upstream. Every problem is reported at once. | `test_workflow_domain.py` (incl. property tests: random DAGs order correctly; any added back edge is caught) |
+| W2 | A task becomes `ready` only when every dependency is satisfied: it `succeeded`, or `failed` under the `continue` policy. Its release happens in the same transaction as the last dependency's completion. | `test_parallel_branches_are_released_together`, `test_concurrent_parent_completions_always_release_the_child` (fails within two iterations if the run lock is removed) |
+| W3 | Outcome changes within one run are serialised by a run-row lock, taken before the task lock on every path, so they can't deadlock each other. The reaper takes run locks with `SKIP LOCKED`, so it never waits on a worker. | same; reaper and chaos suites |
+| W4 | Run status follows its tasks. `running` while anything is ready or running; then `succeeded` if every task succeeded, else `failed`. | `test_run_status_follows_task_states` |
+| W5 | A run that stopped on a dead-lettered task (`retry_then_dead`) resumes when that task is replayed, and continues to completion. | `test_replaying_the_dead_task_resumes_the_run` |
+| W6 | `fail_run` cancels every unfinished task in the run. A running task's worker is fenced off and stops. | `test_fail_run_policy_cancels_everything_else` |
+| W7 | Killing **every** process mid-run, even twice and once after a side effect, then restarting, completes the run with each side effect exactly once. | `test_full_system_restart_mid_run_resumes_with_effects_exactly_once` |
+
+**Failure policies**, applied once a node's attempts are exhausted (or immediately, for a
+permanent failure such as invalid data):
+
+| Policy | Task ends | Dependents | Run |
+| --- | --- | --- | --- |
+| `retry_then_dead` (default) | `dead` + dead-letter entry | wait (`pending`) | `failed`, resumes on replay |
+| `fail_run` | `failed` | `cancelled`, with the rest of the run | `failed` |
+| `continue` | `failed` | run normally | finishes, as `failed` |
+
+**Data between nodes.** A param `{"$from": "node", "path": "a.b"}` is resolved by the worker
+from the upstream node's stored result just before execution. If the path doesn't exist, the
+task fails permanently instead of running with missing input.
+
 ## What is *not* guaranteed
 
 - **Exactly-once execution.** A handler may run more than once for the same task: after a crash,
@@ -45,7 +69,9 @@ Conductor assumes:
   effect is at-least-once.
 - **Strict ordering.** Claims are ordered by effective priority, then creation time, but tasks
   run concurrently across workers and retries re-enter the queue. Order of *completion* is not
-  guaranteed. Express real ordering requirements as workflow dependencies (Phase 2).
+  guaranteed. Express real ordering requirements as workflow dependencies.
+- **Isolation from edits.** Editing a workflow creates a new version for future runs. Runs that
+  already started keep the tasks they were created with.
 - **Bounded recovery time under database unavailability.** While Postgres is down nothing
   progresses. Workers stop all work once they can't renew for `lease_ttl_s`, and resume when it
   returns.
