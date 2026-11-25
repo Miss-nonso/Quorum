@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import random
+from string import Template
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
@@ -78,7 +80,12 @@ FLAKY = TaskType(
 
 class NotifyParams(_Params):
     channel: str = Field(default="general", min_length=1, max_length=64)
-    message: str = Field(min_length=1, max_length=500)
+    message: str = Field(
+        min_length=1,
+        max_length=500,
+        description="Text with optional ${name} placeholders filled from `vars`.",
+    )
+    vars: dict[str, Any] = Field(default_factory=dict)
     hold_s: float = Field(
         default=0.0,
         ge=0,
@@ -113,7 +120,9 @@ async def _notify(ctx: TaskContext, params: NotifyParams) -> JsonDict:
                     "run_id": ctx.run_id,
                     "task_id": ctx.task_id,
                     "channel": params.channel,
-                    "message": params.message,
+                    "message": Template(params.message).safe_substitute(
+                        {k: "" if v is None else str(v) for k, v in params.vars.items()}
+                    ),
                 },
             )
         ).scalar_one_or_none()

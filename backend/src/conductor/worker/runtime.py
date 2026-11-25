@@ -33,7 +33,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from conductor.core.config import Settings
 from conductor.core.db import asyncpg_dsn
 from conductor.core.logging import bind_log_context
+from conductor.domain.refs import RefError, find_refs, resolve_refs
 from conductor.domain.retry import FailureKind
+from conductor.store import runs as run_store
 from conductor.store import tasks as task_store
 from conductor.store import workers as worker_store
 from conductor.store.events import TASK_READY_CHANNEL, EventType, record_event
@@ -42,6 +44,7 @@ from conductor.worker.registry import (
     InvalidParamsError,
     PermanentTaskError,
     TaskContext,
+    TaskEnvironment,
     TaskRegistry,
     UnknownTaskTypeError,
 )
@@ -61,10 +64,18 @@ class WorkerConfig:
     poll_interval_s: float = 2.0
     shutdown_grace_s: float = 20.0
     listen: bool = True
+    env: TaskEnvironment = field(default_factory=TaskEnvironment)
 
     @classmethod
     def from_settings(cls, settings: Settings) -> WorkerConfig:
         return cls(
+            env=TaskEnvironment(
+                http_allowlist=frozenset(
+                    h.strip().lower() for h in settings.http_allowlist.split(",") if h.strip()
+                ),
+                http_timeout_s=settings.http_timeout_s,
+                http_max_bytes=settings.http_max_bytes,
+            ),
             concurrency=settings.worker_concurrency,
             lease_ttl_s=settings.lease_ttl_s,
             heartbeat_interval_s=settings.heartbeat_interval_s,
@@ -197,7 +208,12 @@ class Worker:
         logger.info("task started", extra={"task_type": claim.task_type})
         try:
             task_type = self._registry.get(claim.task_type)
-            params = self._registry.parse_params(claim.task_type, claim.params)
+            raw_params: dict[str, Any] = claim.params
+            if next(find_refs(raw_params), None) is not None:
+                async with self._engine.connect() as conn:
+                    upstream = await run_store.upstream_results(conn, claim.run_id)
+                raw_params = resolve_refs(raw_params, upstream)
+            params = self._registry.parse_params(claim.task_type, raw_params)
             ctx = TaskContext(
                 task_id=claim.id,
                 run_id=claim.run_id,
@@ -206,6 +222,7 @@ class Worker:
                 idempotency_key=claim.idempotency_key,
                 worker_id=self.id,
                 engine=self._engine,
+                env=self._config.env,
             )
             async with asyncio.timeout(claim.timeout_s):
                 result = await task_type.handler(ctx, params)
@@ -217,7 +234,7 @@ class Worker:
             await self._report_failure(
                 claim, FailureKind.TIMEOUT, {"message": f"timed out after {claim.timeout_s}s"}
             )
-        except (PermanentTaskError, UnknownTaskTypeError, InvalidParamsError) as exc:
+        except (PermanentTaskError, UnknownTaskTypeError, InvalidParamsError, RefError) as exc:
             await self._report_failure(claim, FailureKind.PERMANENT, _describe(exc))
         except Exception as exc:
             await self._report_failure(claim, FailureKind.ERROR, _describe(exc))

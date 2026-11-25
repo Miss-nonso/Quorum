@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from conductor.tasks.basic import FLAKY, NOTIFY, SLEEP
+from conductor.tasks.pipeline import HTTP_FETCH, REPORT, STORE, TRANSFORM, VALIDATE
 from conductor.worker.registry import TaskRegistry
 
 
 def builtin_registry() -> TaskRegistry:
     """A fresh registry holding every built-in task type."""
     registry = TaskRegistry()
-    for task_type in (SLEEP, FLAKY, NOTIFY):
+    for task_type in (SLEEP, FLAKY, NOTIFY, HTTP_FETCH, VALIDATE, TRANSFORM, STORE, REPORT):
         registry.register(task_type)
     return registry

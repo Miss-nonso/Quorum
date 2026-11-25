@@ -8,7 +8,7 @@ is enqueued and again when it is executed.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
 
@@ -16,6 +16,7 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from conductor.domain.backoff import BackoffPolicy
+from conductor.domain.dag import WorkflowDefinition, validate_definition
 from conductor.store.tasks import TaskSpec
 
 JsonDict = dict[str, Any]
@@ -39,6 +40,16 @@ class PermanentTaskError(Exception):
 
 
 @dataclass(frozen=True, slots=True)
+class TaskEnvironment:
+    """Operator-controlled limits that built-in tasks must respect."""
+
+    # Hosts http_fetch may contact: "host" (any port) or "host:port".
+    http_allowlist: frozenset[str] = frozenset({"localhost", "127.0.0.1"})
+    http_timeout_s: float = 10.0
+    http_max_bytes: int = 256 * 1024
+
+
+@dataclass(frozen=True, slots=True)
 class TaskContext:
     """What a handler knows about the attempt it is running."""
 
@@ -49,6 +60,7 @@ class TaskContext:
     idempotency_key: str
     worker_id: UUID
     engine: AsyncEngine  # for side effects recorded under idempotency_key
+    env: TaskEnvironment = field(default_factory=TaskEnvironment)
 
 
 Handler = Callable[[TaskContext, Any], Awaitable[JsonDict]]
@@ -92,6 +104,18 @@ class TaskRegistry:
             return task_type.params_model.model_validate(dict(params))
         except ValidationError as exc:
             raise InvalidParamsError(name, exc) from exc
+
+    def validate_workflow(self, definition: WorkflowDefinition) -> list[str]:
+        """Validate a workflow's graph *and* every node's params; return topological order.
+
+        Raises:
+            conductor.domain.dag.DagError: listing every problem found.
+        """
+
+        def check(task_type: str, params: Mapping[str, Any]) -> None:
+            self.parse_params(task_type, params)
+
+        return validate_definition(definition, check)
 
     def build_spec(
         self,

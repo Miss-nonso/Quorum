@@ -51,6 +51,14 @@ class Settings(BaseModel):
     shutdown_grace_s: float = Field(default=20.0, ge=0)
     worker_listen: bool = Field(default=True, description="Use LISTEN/NOTIFY to wake early.")
 
+    # --- built-in task limits
+    http_allowlist: str = Field(
+        default="localhost,127.0.0.1",
+        description="Comma-separated hosts (or host:port) that http_fetch may contact.",
+    )
+    http_timeout_s: float = Field(default=10.0, gt=0, le=60)
+    http_max_bytes: int = Field(default=256 * 1024, ge=1, le=10 * 1024 * 1024)
+
     # --- scheduler / reaper
     reaper_interval_s: float = Field(default=5.0, gt=0)
     reaper_batch_size: int = Field(default=100, ge=1, le=10_000)
