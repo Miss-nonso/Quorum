@@ -48,5 +48,32 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  scheduler:
+    <<: *backend
+    command: ["scheduler"]
+    healthcheck:
+      disable: true  # no HTTP port; liveness is visible in logs and, later, metrics
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # Scale with: docker compose -f deploy/docker-compose.yml up --scale worker=5
+  worker:
+    <<: *backend
+    command: ["worker"]
+    healthcheck:
+      disable: true  # liveness is the heartbeat in the workers table
+    environment:
+      CONDUCTOR_ENV: development
+      CONDUCTOR_DATABASE_URL: postgresql+asyncpg://conductor:conductor@db:5432/conductor
+      CONDUCTOR_LOG_LEVEL: ${CONDUCTOR_LOG_LEVEL:-INFO}
+      CONDUCTOR_LOG_FORMAT: ${CONDUCTOR_LOG_FORMAT:-json}
+      CONDUCTOR_WORKER_CONCURRENCY: ${CONDUCTOR_WORKER_CONCURRENCY:-4}
+    # SIGTERM triggers a graceful drain; give it longer than shutdown_grace_s.
+    stop_grace_period: 30s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
 volumes:
   pgdata:

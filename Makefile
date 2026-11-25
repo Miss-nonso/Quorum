@@ -4,6 +4,8 @@ SHELL := /bin/bash
 
 COMPOSE := docker compose -f deploy/docker-compose.yml
 UV      := cd backend && uv run
+# The engine's core packages must stay at or above this line coverage.
+COV_CORE := src/conductor/domain/*,src/conductor/worker/*,src/conductor/scheduler/*,src/conductor/store/*
 
 .PHONY: help
 help: ## Show available targets
@@ -14,7 +16,7 @@ install: ## Install backend dependencies (incl. dev tools) into backend/.venv
 	cd backend && uv sync --locked
 
 .PHONY: dev
-dev: ## Build and run the full local stack (DB, migrations, API) in the foreground
+dev: ## Build and run the full local stack (DB, migrations, API, scheduler, worker)
 	$(COMPOSE) up --build
 
 .PHONY: down
@@ -40,16 +42,22 @@ lint: ## Lint and check formatting (no changes)
 	$(UV) ruff format --check .
 
 .PHONY: typecheck
-typecheck: ## Type-check the backend (mypy strict)
+typecheck: ## Type-check the backend and its tests (mypy strict)
 	$(UV) mypy
+	$(UV) mypy tests
 
 .PHONY: test-unit
 test-unit: ## Run tests that need no database
 	$(UV) pytest tests/unit
 
 .PHONY: test
-test: db ## Run the full test suite against the Compose PostgreSQL
-	$(UV) pytest
+test: db ## Run every test (unit, integration, chaos) with the coverage gate
+	$(UV) pytest --cov --cov-report=term
+	$(UV) coverage report --include='$(COV_CORE)' --fail-under=85
+
+.PHONY: test-chaos
+test-chaos: db ## Run only the chaos tests (real worker processes, SIGKILL/SIGSTOP)
+	$(UV) pytest tests/chaos -v
 
 .PHONY: check
 check: lint typecheck test ## Everything CI runs on the backend

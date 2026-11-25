@@ -30,6 +30,7 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy
+      - run: uv run mypy tests
 
   backend-test:
     name: Backend · tests (PostgreSQL 16)
@@ -54,7 +55,12 @@ jobs:
           version: "0.13.9"
           enable-cache: true
       - run: uv sync --locked
-      - run: uv run pytest
+      - name: Unit, integration and chaos tests
+        run: uv run pytest --cov --cov-report=term
+      - name: Coverage gate (domain, worker, scheduler, store >= 85%)
+        run: >-
+          uv run coverage report --fail-under=85
+          --include='src/conductor/domain/*,src/conductor/worker/*,src/conductor/scheduler/*,src/conductor/store/*'
 
   backend-image:
     name: Backend · image build
