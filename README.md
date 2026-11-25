@@ -168,4 +168,3 @@ Method, hardware and how to reproduce: [docs/benchmarks.md](docs/benchmarks.md).
 | `frontend/` | Next.js dashboard, Vitest and Playwright + axe |
 | `deploy/` | Compose (dev and prod), Caddyfile, backup script |
 | `docs/` | Architecture, semantics, benchmarks, deployment, ADRs |
-# Quorum
