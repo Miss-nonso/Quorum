@@ -1,0 +1,36 @@
+{
+	email {$ACME_EMAIL}
+}
+
+# Automatic HTTPS (Let's Encrypt) for the API. The dashboard lives on Vercel.
+{$API_DOMAIN} {
+	encode zstd gzip
+
+	# Metrics are for the operator, not the internet. Scrape them over the
+	# Docker network (http://api:8000/metrics) or an SSH tunnel instead.
+	@metrics path /metrics /api/v1/metrics
+	respond @metrics 404
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# Server-Sent Events: flush every event immediately, never buffer.
+	@stream path /api/v1/stream
+	reverse_proxy @stream api:8000 {
+		flush_interval -1
+		transport http {
+			read_timeout 0
+		}
+	}
+
+	reverse_proxy api:8000
+
+	log {
+		output stdout
+		format json
+	}
+}

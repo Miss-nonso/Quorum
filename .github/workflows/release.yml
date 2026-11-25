@@ -1,0 +1,84 @@
+name: Release
+
+# Push a version tag (git tag v1.2.3 && git push --tags) to publish images and deploy.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  images:
+    name: Publish backend image
+    runs-on: ubuntu-24.04
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: meta
+        run: |
+          repo="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/conductor-backend"
+          echo "image=$repo:${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          echo "latest=$repo:latest" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}
+            ${{ steps.meta.outputs.latest }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to the VPS
+    needs: images
+    runs-on: ubuntu-24.04
+    # Runs only once the deployment secrets exist (see docs/deployment.md).
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    environment: production
+    steps:
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Pull and restart
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          IMAGE: ${{ needs.images.outputs.image }}
+        run: |
+          # $1 = image to run, $2 = git ref to check out (the tag being released).
+          ssh -i ~/.ssh/id_deploy "$USER@$HOST" bash -s -- "$IMAGE" "$GITHUB_REF_NAME" <<'EOF'
+          set -euo pipefail
+          cd /opt/conductor
+          git fetch --tags --quiet
+          git checkout --quiet "$2"
+          export CONDUCTOR_IMAGE="$1"
+          ./deploy/backup.sh
+          docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env pull
+          docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --remove-orphans
+          docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env ps
+          EOF
+      - name: Smoke test
+        env:
+          API_URL: ${{ vars.API_URL }}
+        run: |
+          for i in $(seq 1 30); do
+            curl -fsS "$API_URL/api/v1/health" && exit 0
+            sleep 5
+          done
+          echo "API did not become healthy" >&2; exit 1

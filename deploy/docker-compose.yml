@@ -1,17 +1,30 @@
-# Local development stack: `make dev` (or `docker compose -f deploy/docker-compose.yml up`).
-# Values here are development defaults only; production uses docker-compose.prod.yml
-# with secrets from the environment.
+# Local stack in one command:  docker compose -f deploy/docker-compose.yml up --build
+# Dashboard http://localhost:3000 · API http://localhost:8000 (docs at /docs).
+# Runs the public-demo experience: seeded sample workflow, chaos-enabled workers.
+# Development defaults only; production uses docker-compose.prod.yml.
 name: conductor
 
 x-backend: &backend
   build:
     context: ../backend
   image: conductor-backend:dev
-  environment:
+  environment: &backend-env
     CONDUCTOR_ENV: development
     CONDUCTOR_DATABASE_URL: postgresql+asyncpg://conductor:conductor@db:5432/conductor
     CONDUCTOR_LOG_LEVEL: ${CONDUCTOR_LOG_LEVEL:-INFO}
     CONDUCTOR_LOG_FORMAT: ${CONDUCTOR_LOG_FORMAT:-json}
+    CONDUCTOR_DEMO_MODE: "true"
+    CONDUCTOR_DEMO_DATASET_URL: http://api:8000/api/v1/demo/dataset
+    CONDUCTOR_HTTP_ALLOWLIST: api,localhost,127.0.0.1
+    CONDUCTOR_CORS_ORIGINS: http://localhost:3000
+    # Demo-friendly timings: a killed worker's task is recovered within seconds.
+    CONDUCTOR_LEASE_TTL_S: "6"
+    CONDUCTOR_HEARTBEAT_INTERVAL_S: "1"
+    CONDUCTOR_REAPER_INTERVAL_S: "1"
+    CONDUCTOR_WORKER_UNHEALTHY_AFTER_S: "3"
+    CONDUCTOR_WORKER_DEAD_AFTER_S: "8"
+    CONDUCTOR_AGING_INTERVAL_S: "1"
+    CONDUCTOR_AGING_TICK_S: "1"
 
 services:
   db:
@@ -35,9 +48,21 @@ services:
     <<: *backend
     command: ["migrate"]
     restart: "no"
+    healthcheck:
+      disable: true
     depends_on:
       db:
         condition: service_healthy
+
+  seed:
+    <<: *backend
+    command: ["seed"]
+    restart: "no"
+    healthcheck:
+      disable: true
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 
   api:
     <<: *backend
@@ -45,35 +70,47 @@ services:
     ports:
       - "127.0.0.1:${CONDUCTOR_API_HOST_PORT:-8000}:8000"
     depends_on:
-      migrate:
+      seed:
         condition: service_completed_successfully
 
   scheduler:
     <<: *backend
     command: ["scheduler"]
     healthcheck:
-      disable: true  # no HTTP port; liveness is visible in logs and, later, metrics
+      disable: true  # no HTTP port; leadership is visible in /api/v1/stats
     depends_on:
       migrate:
         condition: service_completed_successfully
 
-  # Scale with: docker compose -f deploy/docker-compose.yml up --scale worker=5
+  # More workers: docker compose -f deploy/docker-compose.yml up --scale worker=5
   worker:
     <<: *backend
     command: ["worker"]
+    environment:
+      <<: *backend-env
+      CONDUCTOR_WORKER_CONCURRENCY: ${CONDUCTOR_WORKER_CONCURRENCY:-4}
+      CONDUCTOR_DEMO_CHAOS: "true"
+    # The demo's "kill a worker" exits the process; Docker brings it back as a new worker.
+    restart: unless-stopped
+    deploy:
+      replicas: 3
     healthcheck:
       disable: true  # liveness is the heartbeat in the workers table
-    environment:
-      CONDUCTOR_ENV: development
-      CONDUCTOR_DATABASE_URL: postgresql+asyncpg://conductor:conductor@db:5432/conductor
-      CONDUCTOR_LOG_LEVEL: ${CONDUCTOR_LOG_LEVEL:-INFO}
-      CONDUCTOR_LOG_FORMAT: ${CONDUCTOR_LOG_FORMAT:-json}
-      CONDUCTOR_WORKER_CONCURRENCY: ${CONDUCTOR_WORKER_CONCURRENCY:-4}
-    # SIGTERM triggers a graceful drain; give it longer than shutdown_grace_s.
     stop_grace_period: 30s
     depends_on:
       migrate:
         condition: service_completed_successfully
+
+  dashboard:
+    build:
+      context: ../frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:${CONDUCTOR_API_HOST_PORT:-8000}
+    image: conductor-dashboard:dev
+    ports:
+      - "127.0.0.1:${CONDUCTOR_DASHBOARD_HOST_PORT:-3000}:3000"
+    depends_on:
+      - api
 
 volumes:
   pgdata:
