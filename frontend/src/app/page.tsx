@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
-import { OverviewView } from "@/views/overview";
+import { DemoView } from "@/views/demo";
 
-export const metadata: Metadata = { title: "Overview" };
+export const metadata: Metadata = { title: { absolute: "Conductor: kill a worker, watch nothing get lost" } };
 
 export default function Page() {
   return (
     <Suspense>
-      <OverviewView />
+      <DemoView />
     </Suspense>
   );
 }

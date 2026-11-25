@@ -8,6 +8,8 @@ import type { DeadLetter, Page, RunDetail } from "./types";
 // Live data arrives over SSE; polling is only the fallback if the stream drops.
 const FALLBACK_POLL_MS = 10_000;
 
+export const useMeta = () => useQuery({ queryKey: ["meta"], queryFn: api.meta, staleTime: Infinity });
+
 export const useStats = () =>
   useQuery({ queryKey: ["stats"], queryFn: api.stats, refetchInterval: FALLBACK_POLL_MS });
 
@@ -52,10 +54,12 @@ export const useDeadLetters = (offset: number) =>
     placeholderData: keepPreviousData,
   });
 
+/** Start a run. On the public demo this becomes a sandboxed demo run of the sample. */
 export function useTriggerRun() {
   const qc = useQueryClient();
+  const meta = useMeta();
   return useMutation({
-    mutationFn: api.triggerRun,
+    mutationFn: (workflowId: string) => (meta.data?.demo_mode ? api.demo.run() : api.triggerRun(workflowId)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["runs"] }),
   });
 }
@@ -75,13 +79,19 @@ export function useReplay() {
     mutationFn: (letter: DeadLetter) => api.replay(letter.id),
     onMutate: async (letter) => {
       await qc.cancelQueries({ queryKey: ["dead-letters"] });
-      const snapshots = qc.getQueriesData<Page<DeadLetter>>({ queryKey: ["dead-letters"] });
-      for (const [key, page] of snapshots) {
-        if (page) {
+      // Cached shapes differ: paginated lists hold a Page, per-run lookups a plain array.
+      const snapshots = qc.getQueriesData<Page<DeadLetter> | DeadLetter[]>({ queryKey: ["dead-letters"] });
+      for (const [key, data] of snapshots) {
+        if (Array.isArray(data)) {
+          qc.setQueryData<DeadLetter[]>(
+            key,
+            data.filter((l) => l.id !== letter.id),
+          );
+        } else if (data) {
           qc.setQueryData<Page<DeadLetter>>(key, {
-            ...page,
-            items: page.items.filter((l) => l.id !== letter.id),
-            total: Math.max(0, page.total - 1),
+            ...data,
+            items: data.items.filter((l) => l.id !== letter.id),
+            total: Math.max(0, data.total - 1),
           });
         }
       }

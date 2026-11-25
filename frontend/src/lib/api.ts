@@ -1,4 +1,5 @@
-import type { DeadLetter, Page, Run, RunDetail, Stats, Worker, Workflow } from "./types";
+import { sandboxId } from "./sandbox";
+import type { DeadLetter, Page, Run, RunDetail, SandboxState, Stats, Worker, Workflow } from "./types";
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
 
@@ -21,7 +22,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     response = await fetch(`${API_URL}/api/v1${path}`, {
       ...init,
-      headers: { "Content-Type": "application/json", ...init?.headers },
+      // The sandbox header is harmless outside the demo and scopes actions within it.
+      headers: { "Content-Type": "application/json", "X-Sandbox-Id": sandboxId(), ...init?.headers },
     });
   } catch {
     throw new ApiError(0, "network_error", "Can't reach the Conductor API.", null);
@@ -54,6 +56,7 @@ function query(params: Record<string, string | number | boolean | undefined | nu
 }
 
 export const api = {
+  meta: () => request<{ version: string; demo_mode: boolean }>("/meta"),
   stats: () => request<Stats>("/stats"),
   workers: () => request<Worker[]>("/workers"),
   workflows: (limit = 50) => request<Page<Workflow>>(`/workflows${query({ limit })}`),
@@ -76,4 +79,27 @@ export const api = {
       method: "POST",
       body: "{}",
     }),
+  workflowByName: async (name: string) =>
+    (await request<Page<Workflow>>(`/workflows${query({ limit: 100 })}`)).items.find(
+      (w) => w.name === name,
+    ) ?? null,
+  deadLettersForRun: async (runId: string) =>
+    (await request<Page<DeadLetter>>(`/dead-letters${query({ limit: 100 })}`)).items.filter(
+      (l) => l.run_id === runId,
+    ),
+  demo: {
+    sandbox: () => request<SandboxState>("/demo/sandbox"),
+    run: () => request<Run>("/demo/runs", { method: "POST", body: "{}" }),
+    kill: () =>
+      request<{ worker_id: string; hostname: string; tasks: string[] }>("/demo/chaos/kill-worker", {
+        method: "POST",
+        body: "{}",
+      }),
+    flood: () => request<{ low: number; high: number }>("/demo/chaos/flood", { method: "POST", body: "{}" }),
+    failures: (enabled: boolean) =>
+      request<{ enabled: boolean }>("/demo/chaos/toggle-failures", {
+        method: "POST",
+        body: JSON.stringify({ enabled }),
+      }),
+  },
 };

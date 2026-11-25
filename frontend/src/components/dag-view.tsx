@@ -11,9 +11,10 @@ import {
   ReactFlow,
   type Edge,
   type Node,
+  type NodeChangeset,
   type NodeProps,
 } from "@xyflow/react";
-import { memo, useMemo } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 
 import { layoutDag } from "@/lib/dag-layout";
 import { statusMeta, StatusIcon } from "./status";
@@ -86,6 +87,18 @@ export function DagView({
   height?: number;
   label: string;
 }) {
+  // React Flow keeps each node's measured size on the node object and hides
+  // nodes it hasn't measured. Our nodes are rebuilt whenever a status
+  // changes, so remember the measurements and carry them over; otherwise every
+  // live update would blank the graph.
+  const [sizes, setSizes] = useState<Record<string, { width: number; height: number }>>({});
+  const onNodesChange = useCallback((changes: NodeChangeset<DagNode>) => {
+    const measured = changes
+      .getByType("dimensions")
+      .flatMap((c) => (c.dimensions ? [[c.id, c.dimensions] as const] : []));
+    if (measured.length) setSizes((prev) => ({ ...prev, ...Object.fromEntries(measured) }));
+  }, []);
+
   const { flowNodes, flowEdges } = useMemo(() => {
     const positions = new Map(layoutDag(nodes).map((p) => [p.key, p]));
     const statusOf = new Map(nodes.map((n) => [n.key, n.status]));
@@ -97,6 +110,7 @@ export function DagView({
       draggable: false,
       connectable: false,
       ariaRole: "group",
+      measured: sizes[n.key],
     }));
     const flowEdges: Edge[] = nodes.flatMap((n) =>
       n.depends_on.map((dep) => {
@@ -114,7 +128,7 @@ export function DagView({
       }),
     );
     return { flowNodes, flowEdges };
-  }, [nodes, selectedKey, onSelect]);
+  }, [nodes, selectedKey, onSelect, sizes]);
 
   return (
     <figure className="card overflow-hidden" style={{ height }} aria-label={label}>
@@ -122,6 +136,7 @@ export function DagView({
         nodes={flowNodes}
         edges={flowEdges}
         nodeTypes={nodeTypes}
+        onNodesChange={onNodesChange}
         fitView
         fitViewOptions={{ padding: 0.2, maxZoom: 1.1 }}
         minZoom={0.3}

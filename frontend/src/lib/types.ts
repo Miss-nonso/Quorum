@@ -149,3 +149,14 @@ export interface Stats {
     healthy: boolean;
   } | null;
 }
+
+export interface SandboxState {
+  sandbox_id: string;
+  failures_enabled: boolean;
+  runs: { id: string; status: RunStatus; created_at: string }[];
+  flood: {
+    low: Partial<Record<TaskStatus, number>>;
+    high: Partial<Record<TaskStatus, number>>;
+    max_aging_bonus: number;
+  };
+}

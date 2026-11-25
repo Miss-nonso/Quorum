@@ -3,6 +3,7 @@
 import {
   Activity,
   Boxes,
+  FlaskConical,
   History,
   LayoutDashboard,
   Moon,
@@ -19,7 +20,8 @@ import { useLive, type ConnectionState } from "@/lib/live";
 import { useStats } from "@/lib/queries";
 
 const NAV = [
-  { href: "/", label: "Overview", icon: LayoutDashboard },
+  { href: "/", label: "Demo", icon: FlaskConical },
+  { href: "/overview", label: "Overview", icon: LayoutDashboard },
   { href: "/workflows", label: "Workflows", icon: WorkflowIcon },
   { href: "/runs", label: "History", icon: History },
   { href: "/workers", label: "Workers", icon: Server },

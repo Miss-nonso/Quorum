@@ -11,7 +11,7 @@ import { StatusBadge } from "@/components/status";
 import { useToast } from "@/components/toast";
 import { RelativeTime, Section } from "@/components/widgets";
 import { formatDuration, formatUntil, runDuration, shortId } from "@/lib/format";
-import { useRuns, useTriggerRun, useWorkflow, useWorkflows } from "@/lib/queries";
+import { useMeta, useRuns, useTriggerRun, useWorkflow, useWorkflows } from "@/lib/queries";
 import type { Workflow } from "@/lib/types";
 import { useNow } from "@/lib/use-now";
 
@@ -25,6 +25,9 @@ function RunButton({
   const trigger = useTriggerRun();
   const router = useRouter();
   const toast = useToast();
+  const meta = useMeta();
+  // The public demo only runs the sample pipeline (in your sandbox).
+  if (meta.data?.demo_mode && workflow.name !== "order-pipeline") return null;
   return (
     <button
       type="button"

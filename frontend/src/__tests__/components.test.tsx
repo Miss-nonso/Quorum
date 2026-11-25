@@ -92,3 +92,28 @@ describe("Pagination", () => {
     expect(screen.getByText("Page 1 of 3")).toBeTruthy();
   });
 });
+
+describe("useReplay optimistic update", () => {
+  it("handles both paginated and per-run dead-letter caches, and sends the request", async () => {
+    const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+    const { renderHook, waitFor } = await import("@testing-library/react");
+    const { useReplay } = await import("@/lib/queries");
+    const { vi } = await import("vitest");
+    const letter = { id: "dl1", run_id: "r1", node_key: "notify" } as never;
+    const fetchMock = vi.fn<(url: string) => Promise<Response>>(
+      async () => new Response(JSON.stringify({ task_id: "t", run_id: "r1" })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const qc = new QueryClient();
+    qc.setQueryData(["dead-letters", 0], { items: [letter], total: 1, limit: 20, offset: 0 });
+    qc.setQueryData(["dead-letters", "run", "r1"], [letter]);
+    const { result } = renderHook(() => useReplay(), {
+      wrapper: ({ children }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>,
+    });
+    result.current.mutate(letter);
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(String(fetchMock.mock.calls[0][0])).toContain("/dead-letters/dl1/replay");
+    vi.unstubAllGlobals();
+  });
+});

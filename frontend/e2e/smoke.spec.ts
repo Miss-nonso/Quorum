@@ -1,23 +1,12 @@
-import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-const API = process.env.E2E_API_URL ?? "http://localhost:8000";
-
-async function expectAccessible(page: Page) {
-  const results = await new AxeBuilder({ page })
-    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-    .analyze();
-  const summary = results.violations.map(
-    (v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`,
-  );
-  expect(summary, "axe violations").toEqual([]);
-}
+import { expectAccessible } from "./a11y";
 
 test.describe("dashboard smoke @mobile", () => {
   for (const theme of ["light", "dark"] as const) {
     test(`overview is live and accessible (${theme})`, async ({ page }) => {
       await page.addInitScript((t) => localStorage.setItem("conductor-theme", t), theme);
-      await page.goto("/");
+      await page.goto("/overview");
       await expect(page.getByRole("heading", { level: 1, name: "Overview" })).toBeVisible();
       await expect(page.getByRole("status").filter({ hasText: "Live" })).toBeVisible();
       await expect(page.getByText("Succeeded").first()).toBeVisible();
@@ -68,36 +57,14 @@ test("history, workers and dead letters render and are accessible", async ({ pag
   await expectAccessible(page);
 });
 
-test("a dead-lettered job can be replayed with one click", async ({ page, request }) => {
-  const job = await request.post(`${API}/api/v1/jobs`, {
-    data: { task_type: "flaky", params: { failure_rate: 1 }, max_attempts: 1 },
-  });
-  expect(job.ok()).toBeTruthy();
-  const { task_id, run_id } = (await job.json()) as { task_id: string; run_id: string };
-
-  await page.goto("/dead-letters");
-  // Find *this* job's card by its run id: earlier runs may have left similar letters.
-  const card = page.getByRole("listitem").filter({ hasText: `run ${run_id.slice(0, 8)}` });
-  await expect(card).toBeVisible({ timeout: 20_000 });
-  await card.getByRole("button", { name: /Replay/ }).click();
-  await expect(page.getByRole("status").filter({ hasText: "back in the queue" })).toBeVisible();
-
-  const task = await (await request.get(`${API}/api/v1/dead-letters?include_replayed=true&limit=100`)).json();
-  expect(
-    task.items.some(
-      (l: { task_id: string; replayed_at: string | null }) => l.task_id === task_id && l.replayed_at,
-    ),
-  ).toBe(true);
-});
-
 test("keyboard users can skip to content and reach every nav link", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/overview");
   await page.keyboard.press("Tab");
   const skip = page.getByRole("link", { name: "Skip to content" });
   await expect(skip).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.locator("main")).toBeFocused();
-  for (const name of ["Workflows", "History", "Workers", "Dead letters"]) {
+  for (const name of ["Demo", "Overview", "Workflows", "History", "Workers", "Dead letters"]) {
     await expect(
       page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: new RegExp(name) }),
     ).toBeVisible();

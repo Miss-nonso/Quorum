@@ -79,6 +79,11 @@ export function narrate(e: RunEvent): Narration {
         text: `${worker} noticed it no longer owns ${task} and stopped working on it.`,
         tone: "warn",
       };
+    case "chaos_worker_killed":
+      return {
+        text: `The demo crashed ${worker} while it was running ${task}. Its claim will expire, and another worker will pick the task up.`,
+        tone: "bad",
+      };
     case "stale_write_rejected":
       return {
         text: `A late result for ${task} from ${worker} was rejected: another worker had already taken over.`,
