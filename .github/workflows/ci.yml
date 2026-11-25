@@ -6,8 +6,11 @@ on:
   pull_request:
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Pull requests: one group per PR, so a new push cancels the superseded run.
+  # Everything else (main): one group per commit and never cancelled, so every
+  # commit keeps a complete result and re-running an old one can't cancel a newer one.
+  group: ci-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
